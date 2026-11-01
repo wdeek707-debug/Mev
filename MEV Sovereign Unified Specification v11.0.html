@@ -1,0 +1,2204 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name=claude:viewport-fit-sides content=cover><style>:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}</style><style>.md-table{overflow-x:auto}@media print{.md-table{overflow-x:visible}}</style><style>:root{color-scheme:light dark;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}}:root[data-theme="dark"]{color-scheme:dark;--md-bg:#0d0d0d;--md-text:rgba(255,255,255,.85);--md-muted:rgba(255,255,255,.6);--md-fill:rgba(255,255,255,.06);--md-fill-strong:rgba(255,255,255,.09);--md-rule:rgba(255,255,255,.14);--md-rule-strong:rgba(255,255,255,.22);--md-link:hsl(210 100% 72%)}:root[data-theme="light"]{color-scheme:light}@media print{:root,:root[data-theme="dark"]{color-scheme:light;--md-bg:#fff;--md-text:rgba(0,0,0,.8);--md-muted:rgba(0,0,0,.6);--md-fill:rgba(0,0,0,.04);--md-fill-strong:rgba(0,0,0,.06);--md-rule:rgba(0,0,0,.1);--md-rule-strong:rgba(0,0,0,.16);--md-link:hsl(210 100% 45%)}}body{background:var(--md-bg);color:var(--md-text);max-width:720px;margin:0 auto;padding:32px;display:flex;flex-direction:column;gap:10px;font:14px/1.55 -apple-system,BlinkMacSystemFont,'SF Pro','Segoe UI',sans-serif;overflow-wrap:break-word}body>:first-child{margin-top:0}h1,h2,h3,h4,h5,h6{margin:6px 0 0;line-height:1.25;font-weight:600;text-wrap:balance}h1{font-size:1.35em}h2{font-size:1.15em;color:var(--md-muted)}h3,h4,h5,h6{font-size:1em}p,ul,ol,blockquote,table,pre,hr{margin:0}strong{font-weight:600}a{color:var(--md-link);text-decoration:none}a:hover{text-decoration:underline}ul,ol{display:flex;flex-direction:column;gap:6px;padding-left:22px}ul{list-style:disc}ol{list-style:decimal}:is(li,td,th)>*+:is(p,ul,ol,blockquote){margin-top:6px}blockquote{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--md-rule);padding-left:10px;color:var(--md-muted)}:not(pre)>code{background:var(--md-fill);padding:1px 3px;border-radius:4px;font:.92em 'SF Mono',ui-monospace,Menlo,Consolas,monospace}a>code{background:none;color:inherit}pre{background:var(--md-fill);padding:10px 12px;border-radius:6px;overflow-x:auto;font:12px/1.5 'SF Mono',ui-monospace,Menlo,Consolas,monospace;margin-block:4px}pre code{background:none;padding:0;font:inherit}table{width:100%;border-collapse:separate;border-spacing:2px;font:inherit}th,td{padding:6px 8px;border-radius:3px;text-align:left;vertical-align:top}th{background:var(--md-fill-strong);font-weight:600}td{background:var(--md-fill)}:is(th,td) :not(pre)>code{background:transparent}hr{border:0;border-top:1px solid var(--md-rule-strong);margin-block:10px}img{max-width:100%;height:auto;border-radius:4px}</style>
+</head><body>
+<h1>MEV Sovereign Unified Specification v11.0</h1>
+<p><em>Complete Hardened Specification and Reference Implementation - Arbitrum One</em></p>
+<h2>1. Status and scope</h2>
+<p>This is the single authoritative document. It replaces v10.5 (22 pages), v10.6 and the earlier v11 draft. It contains: threat model, architecture, economics and models, normative requirements, verification requirements, the complete reference implementation (every file the v10.5 blueprint listed, corrected, plus the Rust math, feed decoder and a Solidity math library), the list of corrections made to v10.5, the unverified-claims register, release gates and open decisions.</p>
+<blockquote>
+<p><strong>Note:</strong> Honesty notes. (1) No code in this document was compiled, run, fuzzed or audited; it is a reference to build and test, not a certified artifact. (2) The v10.5 statement &quot;Zero ungrounded claims&quot; and the label &quot;Certora/Spearbit-Hardened&quot; are withdrawn; see section 9. (3) Numeric thresholds are proposed defaults to be tuned against measurements. (4) The detection logic that turns an on-chain event into an ExecutionSignal (the spokes) was never specified by v10.5 and is still out of scope (decision D-6).</p>
+</blockquote>
+<p>Requirement keywords MUST / SHOULD are used in the RFC sense. A requirement with no passing verification is not met.</p>
+<h2>2. Threat model</h2>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Definition</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Assets</td>
+<td>(a) Executor token balance (should be ~0 at rest); (b) operator hot-key ETH for gas; (c) profit recipient funds; (d) admin authority; (e) availability of the trading loop.</td>
+</tr>
+<tr>
+<td>Actors</td>
+<td>External attacker (fake pools, spoofed flash-loan callbacks, malicious tokens/routers); compromised operator key; compromised bot host; malicious or faulty data feed; operator/dev mistakes; competitors.</td>
+</tr>
+<tr>
+<td>Trust boundaries</td>
+<td>Contract trusts only: immutable constants (Balancer, Aave, routers), whitelisted pools/tokens set by admin, and the armed transient state. Bot trusts nothing from the feed until validated and simulated on forked state.</td>
+</tr>
+<tr>
+<td>Worst-case targets</td>
+<td>Operator key leaked =&gt; loss bounded by maxLoan x failed-tx gas, never principal theft (recipient and admin are not operator-controlled). Bot logic bug =&gt; circuit breakers stop it within the loss limit. Contract bug =&gt; pause, sweep, redeploy.</td>
+</tr>
+<tr>
+<td>Out of scope (accepted risks)</td>
+<td>Competition and price moves, chain/sequencer outages, upstream protocol exploits (Aave, Balancer, Uniswap, Camelot). These are bounded by caps, not eliminated.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2>3. Architecture and spoke topology</h2>
+<p>Contracts: one MEVExecutor (section 7.16) with three flash tiers (Uniswap V3 flash swap, Balancer V2, Aave V3), a shared atomic strategy (optional Aave liquidation, up to MAX_HOPS swaps, delta-isolated profit guard) and a role model: admin (cold multisig/timelock), guardian (pause only), profitRecipient (cold, immutable), operators (hot keys, execute only). Off-chain (Rust): feed ingest -&gt; Governor/spokes -&gt; age gate -&gt; flash selection -&gt; route validation -&gt; encode -&gt; forked-state simulation -&gt; guard -&gt; bid -&gt; lease wallet -&gt; sign/send -&gt; reconcile. Math has one reference model (Solidity MEVMath) mirrored in Rust.</p>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Spoke</th>
+<th>Component</th>
+<th>Role</th>
+<th>Anchor in code</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Uniswap V2 / Sushi</td>
+<td>Constant-product pools (x*y=k)</td>
+<td>protocolId 0, IUniV2Router</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Uniswap V3</td>
+<td>Concentrated liquidity, Tier-0 flash swap</td>
+<td>protocolId 1, uniswapV3SwapCallback</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Camelot V3 (Algebra)</td>
+<td>Dynamic-fee concentrated liquidity</td>
+<td>protocolId 3, ICamelotAlgebraRouter</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Aave V3</td>
+<td>Liquidation engine and Tier-2 flash loan</td>
+<td>liquidationCall, executeOperation</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Balancer V2 Vault</td>
+<td>Tier-1 flash loan (fee parameter must be read on-chain)</td>
+<td>executeViaBalancer, receiveFlashLoan</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Sequencer feed</td>
+<td>Real-time ingest</td>
+<td>feed.rs, ARBITRUM_FEED_WS</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Oracle monitoring (Chainlink / Atlas SVR)</td>
+<td>Deviation monitoring (50 bps threshold is a parameter)</td>
+<td>OnChainEvent::OracleUpdate</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Backrun / closed-path engine</td>
+<td>Partial-exit optimization</td>
+<td>partial.rs</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2>4. Market data, economics and models</h2>
+<h3>4.1 Claims from v10.5 and their status</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Claim</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Arbitrum One adopted Priority Gas Auctions with 125 ms rounds (K = 2)</td>
+<td>[UNVERIFIED] unsourced; read primary sources. Bidding disabled until confirmed.</td>
+</tr>
+<tr>
+<td>Entropy research: 87% of atomic arbitrage and 98% of liquidations bypass Timeboost; ~97% of express-lane wins by three entities</td>
+<td>[UNVERIFIED] check the cited governance material.</td>
+</tr>
+<tr>
+<td>Private sequencer mempool (no front-running)</td>
+<td>[UNVERIFIED] check docs; note it conflicts with a competitor-fee-driven bidder.</td>
+</tr>
+<tr>
+<td>Aave liquidation bonus 4.5%-10%</td>
+<td>[UNVERIFIED] read per-asset parameters on-chain.</td>
+</tr>
+<tr>
+<td>Block time 250 ms</td>
+<td>[UNVERIFIED] confirm.</td>
+</tr>
+<tr>
+<td>Atlas searcher bond 0.1 ETH</td>
+<td>[UNVERIFIED] check onboarding guide.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3>4.2 Unit-economics model (replaces the v10.5 tables)</h3>
+<p>All profit terms are in one unit. Per successful event: net = out_final - loan - flash_fee - (pool fees, embedded in the simulated output) - L2_gas*(base+priority) - L1_data_fee - slippage_buffer. Per failed event the cost is gas actually consumed up to the failure point at the same prices plus the L1 data fee. A ProfitGuard revert happens after all hops ran, so a guard failure costs close to a full execution, not the &quot;~45,000 gas&quot; claimed in v10.5 (main.rs itself assumed 280,000). Expected value per attempt = p_success * net_success - (1 - p_success) * cost_failure. Monthly break-even events = monthly_fixed_cost / (p_success * net_success - (1 - p_success) * cost_failure), valid only if that denominator is positive. Flash fees: Balancer fee and Aave premium MUST be read on-chain; a Uniswap V3 flash swap pays the pool fee tier; none is assumed zero. The v10.5 cost and revenue tables (infrastructure $0-$294/month, $180-$1,200 per event, 3-30 events/day, 1 event/month break-even) were the author's estimates without sources; they are removed and MUST be replaced by Stage-1 measurements.</p>
+<h3>4.3 Latency decay and opportunity age</h3>
+<p>edge_retained(dt) = exp(-lambda * dt), lambda = ln(2)/125 = 0.005545177444479562 per ms (half-life 125 ms). This is a heuristic; lambda is a tunable parameter until the ordering policy is verified. Age classes (decision D-1): Fresh 0-40 ms; Warm 41-110 ms; Aging 111-250 ms (liquidations only); otherwise Expired and dropped before simulation.</p>
+<h3>4.4 Bidding</h3>
+<p>max_total_bribe = gross_wei * max_bribe_bps / 10,000. max_priority_per_gas = max_total_bribe / gas_units. bid_priority = min(competitor_priority + 1,000,000 wei, max_priority_per_gas) when bidding_enabled, else 0. total_cost = (base_fee + bid_priority) * gas_units + L1_data_fee. net = gross - total_cost; execute only if net &gt;= min_net_profit. gross MUST be converted to wei from the loan token; competitor_priority MUST be measured or 0. Bidding is OFF by default (OC-09).</p>
+<h3>4.5 Closed partial exit</h3>
+<p>closed_net[k] = simulate(Steps[0..k] + ClosingSwap(Token[k] -&gt; LoanToken)) - loan_amount - cost(k + 1), with cost in loan-token units including L2 gas, L1 data fee and flash fee (v10.5 added wei to token amounts, which is only valid when the loan token is WETH and ignored the flash fee). The candidate route must respect MAX_HOPS and route continuity.</p>
+<h3>4.6 Optimal input for a two-pool cycle</h3>
+<p>With gamma = (10,000 - fee)/10,000 on both pools, pool A reserves (aX, aY) and pool B reserves (bY, bX): the profit-maximizing input is x* = (gamma<em>s - aX</em>bY) / (gamma*(bY + gamma<em>aY)), s = sqrt(aX</em>bX<em>aY</em>bY). In integer form x* = den*(num<em>s - den</em>aX<em>bY) / (num</em>(den<em>bY + num</em>aY)) with num = 10,000 - fee, den = 10,000 (derivation checked by hand). Integer rounding means the result can be off by a unit or two, so the neighbor search of MP-05 is mandatory. Assumes equal fees on both pools.</p>
+<h2>5. Normative requirements</h2>
+<h3>5.1 Smart contract (SC)</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Verified by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SC-01</td>
+<td>Flash callbacks (V3, Balancer, Aave) MUST run only when the executor armed the expected caller and repay token in transient storage in the same tx and msg.sender equals it. All transient slots MUST be zero after every entry point. Balancer callback additionally requires single-token arrays; Aave callback requires initiator == address(this).</td>
+<td>Unit + spoofing mocks; Halmos</td>
+</tr>
+<tr>
+<td>SC-02</td>
+<td>V3 callback MUST require strictly opposite-sign deltas before any unsigned cast, infer the repay token from the deltas and require it equals the armed token, and the entry point MUST revert unless the callback ran exactly once.</td>
+<td>Unit, malicious-pool mocks</td>
+</tr>
+<tr>
+<td>SC-03</td>
+<td>After any successful execution: executor balance of repayToken == preBalance; profitRecipient received exactly finalBal - preBalance - requiredRepay, and that is &gt;= minNetProfit. Profit MUST be computed from balances, never from router return values.</td>
+<td>Invariant, fork, Halmos</td>
+</tr>
+<tr>
+<td>SC-04</td>
+<td>Role separation: admin, guardian, profitRecipient are immutable and non-zero; operators change only via admin; an operator MUST NOT be able to alter any config or move funds elsewhere than profitRecipient; admin can move funds only via sweep to profitRecipient; guardian can only pause.</td>
+<td>Access-control test over every selector; Halmos</td>
+</tr>
+<tr>
+<td>SC-05</td>
+<td>Limits (all MUST): per-token maxLoan (0 = disabled); V3 pool whitelist; hop-token whitelist; MAX_HOPS (proposed 4); deadline horizon (proposed &lt;= 30 s ahead); per-token minProfitFloor with minNetProfit &gt;= floor and &gt; 0; pause blocks every entry point.</td>
+<td>Unit + fuzz on payload fields</td>
+</tr>
+<tr>
+<td>SC-06</td>
+<td>Route: first tokenIn == startToken (or collateral after liquidation); each tokenIn == previous tokenOut; last tokenOut == repayToken. Liquidation only on Balancer/Aave tiers with debtAsset == startToken == repayToken; never on the V3 tier.</td>
+<td>Unit + fuzz of random routes</td>
+</tr>
+<tr>
+<td>SC-07</td>
+<td>Allowances: after liquidationCall the Aave allowance == 0; after each exact-input hop the router allowance == 0; approve(0)-retry path MUST work for USDT-style tokens without corrupting calldata.</td>
+<td>USDT-style mock; invariant</td>
+</tr>
+<tr>
+<td>SC-08</td>
+<td>Token behaviors MUST be handled or explicitly rejected: no-return-value tokens, tokens returning false, fee-on-transfer, rebasing, ERC777-style hooks (reentrancy), blacklisting tokens (revert), returndata bombs. Anything not supported MUST fail closed.</td>
+<td>Adversarial token mocks (section 8.3)</td>
+</tr>
+<tr>
+<td>SC-09</td>
+<td>Every config change and every execution MUST emit an event (operator/pool/token/floor/cap/pause changes; Executed with repayToken and profit).</td>
+<td>Event assertions</td>
+</tr>
+<tr>
+<td>SC-10</td>
+<td>No delegatecall, selfdestruct, upgradeability, or payable fallback/receive. Hard-coded protocol addresses MUST be verified against the chain by a deploy script (code exists, expected interface responds).</td>
+<td>Static analysis; deploy-script test</td>
+</tr>
+<tr>
+<td>SC-11</td>
+<td>Pin exact solc version (no caret), evm_version cancun, fixed optimizer settings; reproducible build; verified source on the explorer; ArbOS must support EIP-1153 (check before deploy).</td>
+<td>Build script; CI</td>
+</tr>
+<tr>
+<td>SC-12</td>
+<td>Admin SHOULD be a multisig behind a timelock for risk-increasing changes (raising maxLoan, adding pools/tokens, lowering floors); risk-reducing changes and pause SHOULD be immediate.</td>
+<td>Deployment checklist</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3>5.2 Math parity (MP)</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Verified by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MP-01</td>
+<td>MEVMath (Solidity) is the single reference. Rust, and Huff/Yul if shipped, MUST match it. Mapping: Solidity revert == Rust None == Huff/Yul revert, for every case: overflow, fee &gt; 10000 (getAmountOut), fee &gt;= 10000 (getAmountIn), amountOut &gt;= reserveOut, any factor &gt; 2^128 in sqrtProduct4. Zero inputs return 0 in all languages. A pool with reserveIn == 0 MUST return 0 everywhere.</td>
+<td>Differential fuzz</td>
+</tr>
+<tr>
+<td>MP-02</td>
+<td>Rust generates a JSON vector file (inputs, expected outputs/None); Foundry consumes it with vm.readFile and vm.parseJson. ffi MUST be false in CI.</td>
+<td>CI job</td>
+</tr>
+<tr>
+<td>MP-03</td>
+<td>Vector set MUST include: 0, 1, 2, 10^k, 2^64-1, 2^128-1, 2^128, 2^128+1, 2^255, 2^256-1, all pairs/quads of these for multi-arg functions, fees {0,1,30,300,9999,10000,10001}, plus &gt;= 1,000,000 random vectors per function in the nightly run.</td>
+<td>Vector generator tests</td>
+</tr>
+<tr>
+<td>MP-04</td>
+<td>sqrt: r*r &lt;= x &lt; (r+1)^2 checked with 512-bit arithmetic for the whole domain including x = 2^256-1. sqrtProduct/sqrtProduct4 equal an independent 512-bit reference.</td>
+<td>Fuzz</td>
+</tr>
+<tr>
+<td>MP-05</td>
+<td>Optimal-input: the chosen input MUST yield profit &gt;= profit at +/-1, +/-10 and &gt;= a coarse grid search. The closed form is never trusted without the neighbor/grid check. Output MUST be re-simulated through the exact swap functions before use.</td>
+<td>Property test</td>
+</tr>
+<tr>
+<td>MP-06</td>
+<td>Huff/Yul: either pass MP-01..MP-04 or are removed from the release scope. The Yul object MUST have a runtime sub-object to be deployable.</td>
+<td>Differential fuzz or removal</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3>5.3 Off-chain (OC)</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Verified by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OC-01</td>
+<td>No code path may sign a transaction without a successful simulation verdict. Enforce in types: a VerifiedTx newtype that only the guard can construct; the signer accepts only VerifiedTx. main.rs MUST NOT construct SimulationReport.</td>
+<td>Compile-time + unit</td>
+</tr>
+<tr>
+<td>OC-02</td>
+<td>Simulation MUST run on forked state at the target block (not an empty DB) with the same calldata, and MUST check recipient balance delta, executor balance == pre-existing, gas ceiling and success. Simulated vs realized gas MUST be tracked, including the L1 component; revm is not assumed to reproduce Arbitrum gas exactly.</td>
+<td>Fork replay tests</td>
+</tr>
+<tr>
+<td>OC-03</td>
+<td>Money arithmetic MUST be checked or explicitly saturating. Release profile: overflow-checks = true. Deny clippy::arithmetic_side_effects, cast_possible_truncation, unwrap_used, expect_used, indexing_slicing in non-test code.</td>
+<td>CI lints</td>
+</tr>
+<tr>
+<td>OC-04</td>
+<td>Feed decoding MUST never panic and MUST handle: single tx messages, batches, nested batches, truncated data, length-prefix wraparound (use checked_add), type-byte stripping before EIP-2718 decode, unknown kinds (skip, count, alert).</td>
+<td>Unit vectors + cargo-fuzz</td>
+</tr>
+<tr>
+<td>OC-05</td>
+<td>Nonces: peek, commit only after the node accepts the tx, resync from the chain pending nonce (may move backwards), one in-flight tx per wallet; no gaps under rejected simulations or send failures.</td>
+<td>Concurrency tests</td>
+</tr>
+<tr>
+<td>OC-06</td>
+<td>Governor: panic = &quot;unwind&quot; in release; per-spoke time budget on the hot path; DEGRADED returns to HEALTHY on success; TRIPPED gets automatic probing after a cool-down; every transition is logged and metered.</td>
+<td>Unit + chaos test</td>
+</tr>
+<tr>
+<td>OC-07</td>
+<td>Keys: no raw private key held in a plain String or logged; use a keystore/KMS/hardware signer; zeroize secrets; each operator wallet holds only gas money (cap enforced by monitoring).</td>
+<td>Review + secret-scan in CI</td>
+</tr>
+<tr>
+<td>OC-08</td>
+<td>Startup self-check MUST fail closed unless: chain id is 42161; executor.profitRecipient() equals config; every signer is an operator on-chain; maxLoan &gt; 0 for each traded token; pools used are whitelisted; contract code hash equals the deployed build.</td>
+<td>Integration test</td>
+</tr>
+<tr>
+<td>OC-09</td>
+<td>Bidding is disabled until the ordering policy is verified (section 9.3). Competitor fee MUST be measured from the feed or default to zero. Total bid plus all costs (flash fee, pool fees, L2 gas, L1 fee, slippage) MUST stay below expected gross; no hard-coded constants for competitor fee or L1 fee in production paths.</td>
+<td>Unit + shadow data</td>
+</tr>
+<tr>
+<td>OC-10</td>
+<td>Opportunity age uses a monotonic clock; deadlines use block time. Clock drift alarm. Age thresholds are one table shared by code and spec (decision D-1).</td>
+<td>Unit</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3>5.4 Operations and risk (OP)</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Requirement</th>
+<th>Verified by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OP-01</td>
+<td>Automatic circuit breakers: per-spoke loss limit, global daily loss limit (in ETH), consecutive-failure limit, failed-tx ratio limit. A trip MUST pause new sends and SHOULD call pause() on-chain through the guardian key.</td>
+<td>Chaos/drill</td>
+</tr>
+<tr>
+<td>OP-02</td>
+<td>Reconciliation after every executed tx: realized profit and gas vs simulation. Proposed: 3 deviations beyond 20% trip the spoke and alert.</td>
+<td>Shadow + live metrics</td>
+</tr>
+<tr>
+<td>OP-03</td>
+<td>Alerts: executor balance != 0 at rest; operator gas low/high; recipient delta anomalies; paused state; feed lag; sim/real drift; nonce gaps; RPC divergence.</td>
+<td>Alert tests</td>
+</tr>
+<tr>
+<td>OP-04</td>
+<td>Runbook and drill before live funds: pause, revoke operators, sweep, rotate keys, redeploy. Time-to-pause target is measured in the drill.</td>
+<td>Drill report</td>
+</tr>
+<tr>
+<td>OP-05</td>
+<td>Change control: any change to contract or critical Rust re-runs all gates; no hotfix to live without green tests.</td>
+<td>CI policy</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2>6. Formal and property-level requirements</h2>
+<p>Targets for Halmos or Certora (or documented reasons if not feasible). Pseudocode is illustrative and not compiled.</p>
+<pre><code class="language-text">// P1 (SC-03): inventory untouched
+check_balance_unchanged(token, amount, payload) {
+    pre = token.balanceOf(executor);
+    vm.prank(operator); executor.executeViaBalancer(token, amount, payload);   // success path only
+    assert token.balanceOf(executor) == pre;
+}
+// P2 (SC-03): only the recipient gains, and by at least minNetProfit
+check_only_recipient_gains(...) {
+    r0 = token.balanceOf(recipient);  ... execute ...
+    assert token.balanceOf(recipient) - r0 &gt;= payload.minNetProfit;  assert payload.minNetProfit &gt; 0;
+}
+// P3 (SC-04): operators cannot touch config or redirect funds
+check_operator_cannot_admin(bytes4 sel, bytes args) {
+    vm.prank(operator); (ok,) = address(executor).call(abi.encodePacked(sel, args));
+    if (isAdminOrGuardianSelector(sel)) assert !ok;
+}
+// P4 (SC-01): callbacks revert when not armed
+check_callbacks_require_arming(...) { assert callback(...) reverts when transient slots are zero; }
+</code></pre>
+<h3>5.5 Invariants (referenced by tests and gates)</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Invariant (each must be an executable test)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>I-1</td>
+<td>A callback runs only if the executor armed EXPECTED_CALLBACK and EXPECTED_REPAY_TOKEN in the same tx; msg.sender equals the armed address; all transient slots are zero after every entry point.</td>
+</tr>
+<tr>
+<td>I-2</td>
+<td>V3 callback deltas have strictly opposite signs before any unsigned cast; the repay token inferred from the deltas equals the armed token.</td>
+</tr>
+<tr>
+<td>I-3</td>
+<td>The V3 swap must invoke the callback exactly once (CALLBACK_DONE), otherwise revert.</td>
+</tr>
+<tr>
+<td>I-4</td>
+<td>Contract balance of repayToken after any successful execution == preBalance (nothing taken from, nothing added to, pre-existing inventory).</td>
+</tr>
+<tr>
+<td>I-5</td>
+<td>profitRecipient balance delta &gt;= minNetProfit and equals finalBal - preBalance - requiredRepay; minNetProfit &gt; 0.</td>
+</tr>
+<tr>
+<td>I-6</td>
+<td>Route is continuous and ends in repayToken; liquidation only on Balancer/Aave paths and only with debtAsset == startToken == repayToken.</td>
+</tr>
+<tr>
+<td>I-7</td>
+<td>Loan amount &lt;= maxLoan[token]; V3 pool is whitelisted; paused blocks all entry points.</td>
+</tr>
+<tr>
+<td>I-8</td>
+<td>Operator keys cannot change admin, guardian, profitRecipient, operators, whitelists or caps. Only admin sweeps, and only to profitRecipient.</td>
+</tr>
+<tr>
+<td>I-9</td>
+<td>After liquidationCall, allowance of debtAsset to Aave == 0. After every hop, allowance to the router == 0 for exact-input routers.</td>
+</tr>
+<tr>
+<td>I-10</td>
+<td>Rust and Solidity math agree: same output for same input, and &quot;None&quot; in Rust == revert in Solidity (overflow, fee &gt;= 10000 where applicable, amountOut &gt;= reserveOut, factor &gt; 2^128).</td>
+</tr>
+<tr>
+<td>I-11</td>
+<td>Rust never signs a tx unless a revm run on forked state succeeded and the recipient delta met minNetProfit.</td>
+</tr>
+<tr>
+<td>I-12</td>
+<td>Per-wallet nonces never skip: a nonce is consumed only after a successful broadcast.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2>7. Reference implementation</h2>
+<blockquote>
+<p><strong>Note:</strong> Not compiled. Likely first compile issues: alloy 0.8 / revm 19 API paths and feature names (check before pinning), ruint shift/operator forms, private constants inside inline assembly, and stack depth in the Solidity callbacks. Module tree: constants, hub, partial, bidder, physics, age, flash, signer, simroom, tx, math, feed, main.</p>
+</blockquote>
+<h3>7.1 Cargo.toml</h3>
+<pre><code class="language-text">[package]
+name = &#34;mev-sovereign&#34;
+version = &#34;11.0.0&#34;
+edition = &#34;2021&#34;
+
+[dependencies]
+# Pin EXACT versions once the APIs below are confirmed to compile; feature names must be checked.
+alloy = { version = &#34;0.8&#34;, features = [&#34;full&#34;, &#34;node-bindings&#34;, &#34;rpc-types-eth&#34;, &#34;signer-local&#34;, &#34;sol-types&#34;] }
+revm = { version = &#34;19&#34;, features = [&#34;std&#34;, &#34;serde&#34;, &#34;alloydb&#34;] }   # alloydb = forked-state backend (verify)
+tokio = { version = &#34;1&#34;, features = [&#34;full&#34;] }
+serde = { version = &#34;1&#34;, features = [&#34;derive&#34;] }
+serde_json = &#34;1&#34;
+eyre = &#34;0.6&#34;
+tracing = &#34;0.1&#34;
+tracing-subscriber = &#34;0.3&#34;
+zeroize = &#34;1&#34;
+
+[dev-dependencies]
+proptest = &#34;1&#34;
+
+[profile.release]
+panic = &#34;unwind&#34;          # REQUIRED for catch_unwind in the Governor (OC-06)
+overflow-checks = true    # OC-03
+lto = true
+codegen-units = 1
+
+[lints.rust]
+unsafe_code = &#34;forbid&#34;
+
+[lints.clippy]            # OC-03
+arithmetic_side_effects = &#34;deny&#34;
+cast_possible_truncation = &#34;deny&#34;
+cast_sign_loss = &#34;deny&#34;
+unwrap_used = &#34;deny&#34;
+expect_used = &#34;deny&#34;
+indexing_slicing = &#34;deny&#34;
+</code></pre>
+<h3>7.2 src/constants.rs</h3>
+<pre><code class="language-text">// src/constants.rs  -- every address MUST be re-verified against official sources (OC-08).
+use alloy::primitives::{address, Address};
+
+pub const ARBITRUM_CHAIN_ID: u64 = 42161;
+pub const ARBITRUM_FEED_WS: &amp;str = &#34;wss://arb1.arbitrum.io/feed&#34;;          // verify
+
+pub const BALANCER_V2_VAULT: Address = address!(&#34;BA12222222228d8Ba445958a75a0704d566BF2C8&#34;);
+pub const AAVE_V3_POOL:      Address = address!(&#34;794a61358D6845594F94dc1DB02A252b5b4814aD&#34;);
+pub const UNISWAP_V3_ROUTER: Address = address!(&#34;E592427A0AEce92De3Edee1F18E0157C05861564&#34;);
+pub const CAMELOT_V3_ROUTER: Address = address!(&#34;1F721E2E82F6676FCE4eA07A5958cF098D339e18&#34;);
+pub const UNISWAP_V2_ROUTER: Address = address!(&#34;4752ba5DBc23f44D87826276BF6Fd6b1C372aD24&#34;);
+
+// Arbitrum system contracts (verify which one is correct for each use before relying on it)
+pub const ARB_GAS_INFO_ADDR:   Address = address!(&#34;000000000000000000000000000000000000006C&#34;);
+pub const NODE_INTERFACE_ADDR: Address = address!(&#34;00000000000000000000000000000000000000C8&#34;);
+
+pub const WETH: Address = address!(&#34;82aF49447D8a07e3bd95BD0d56f35241523fBab1&#34;);
+pub const USDC: Address = address!(&#34;af88d065e77c8cC2239327C5EDb3A432268e5831&#34;);
+pub const USDT: Address = address!(&#34;Fd086bc7CD5C481DCC9C85ebE478A1C0b69FCbb9&#34;);
+pub const ARB:  Address = address!(&#34;912CE59144191C1204E64559FE8253a0e49E6548&#34;);
+pub const WBTC: Address = address!(&#34;2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f&#34;);
+
+pub const MAX_HOPS: usize = 4;                 // must equal MEVExecutor.MAX_HOPS
+pub const MAX_DEADLINE_HORIZON_SECS: u64 = 30; // must equal MEVExecutor.MAX_DEADLINE_HORIZON
+</code></pre>
+<h3>7.3 src/hub.rs</h3>
+<pre><code class="language-text">// src/hub.rs  -- Governor with panic isolation, time budget, recovery and cool-down probing (OC-06)
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
+use std::sync::Arc;
+use std::time::Instant;
+use alloy::primitives::{Address, U256};
+
+pub const STATUS_HEALTHY: u8 = 0;
+pub const STATUS_DEGRADED: u8 = 1;
+pub const STATUS_TRIPPED: u8 = 2;
+
+#[derive(Debug, Clone)]
+pub enum OnChainEvent {
+    SequencerSwap { pool: Address, token_in: Address, token_out: Address, amount_in: U256, timestamp_ms: u64 },
+    OracleUpdate { feed: Address, asset: Address, new_price: U256, timestamp_ms: u64 },
+    HealthFactorDrop { borrower: Address, collateral: Address, debt: Address, hf_wad: U256, timestamp_ms: u64 },
+}
+
+#[derive(Debug, Clone)]
+pub struct SwapStep {
+    pub protocol_id: u8,      // 0 = UniV2, 1 = UniV3, 3 = Camelot
+    pub pool: Address,
+    pub token_in: Address,
+    pub token_out: Address,
+    pub fee_or_tier: u32,     // UniV3 fee in hundredths of a bip (500, 3000, 10000); must fit 24 bits
+    pub min_out: U256,
+}
+
+#[derive(Debug, Clone)]
+pub struct LiquidationTarget {
+    pub borrower: Address, pub collateral_asset: Address, pub debt_asset: Address, pub debt_to_cover: U256,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExecutionSignal {
+    pub spoke_id: u8,
+    pub loan_token: Address,
+    pub loan_amount: U256,
+    pub steps: Vec&lt;SwapStep&gt;,
+    pub liquidation: Option&lt;LiquidationTarget&gt;,
+    pub expected_profit_loan_token: U256,   // v11: profit in LOAN-TOKEN units (spokes must fill)
+    pub expected_gross_profit_wei: U256,    // same profit converted to wei (spokes must convert)
+    pub event_timestamp_ms: u64,
+}
+
+pub trait SpokeNode: Send + Sync {
+    fn id(&amp;self) -&gt; u8;
+    fn name(&amp;self) -&gt; &amp;&#39;static str;
+    fn on_event(&amp;self, event: &amp;Arc&lt;OnChainEvent&gt;) -&gt; Option&lt;ExecutionSignal&gt;;
+}
+
+pub struct SpokeWrapper {
+    pub node: Box&lt;dyn SpokeNode&gt;,
+    pub failures: AtomicU32,
+    pub max_failures: u32,
+    pub status: AtomicU8,
+    pub tripped_at_ms: AtomicU64,
+}
+
+pub struct Governor {
+    spokes: Vec&lt;SpokeWrapper&gt;,
+    cooldown_ms: u64,      // TRIPPED spokes are probed again after this
+    budget_us: u128,       // a spoke slower than this is treated as failed and its output dropped (stale)
+}
+
+impl Governor {
+    pub fn new(cooldown_ms: u64, budget_us: u128) -&gt; Self { Self { spokes: Vec::new(), cooldown_ms, budget_us } }
+
+    pub fn register(&amp;mut self, node: Box&lt;dyn SpokeNode&gt;, max_failures: u32) {
+        self.spokes.push(SpokeWrapper {
+            node, failures: AtomicU32::new(0), max_failures,
+            status: AtomicU8::new(STATUS_HEALTHY), tripped_at_ms: AtomicU64::new(0),
+        });
+    }
+
+    pub fn revive(&amp;self, spoke_id: u8) {
+        for w in &amp;self.spokes {
+            if w.node.id() == spoke_id {
+                w.failures.store(0, Ordering::SeqCst);
+                w.status.store(STATUS_HEALTHY, Ordering::SeqCst);
+            }
+        }
+    }
+
+    fn record_failure(&amp;self, w: &amp;SpokeWrapper, now_ms: u64) {
+        let c = w.failures.fetch_add(1, Ordering::SeqCst).saturating_add(1);
+        if c &gt;= w.max_failures {
+            w.tripped_at_ms.store(now_ms, Ordering::Release);
+            w.status.store(STATUS_TRIPPED, Ordering::Release);
+            tracing::error!(spoke = w.node.name(), &#34;spoke TRIPPED&#34;);
+        } else {
+            w.status.store(STATUS_DEGRADED, Ordering::Release);
+        }
+    }
+
+    pub fn broadcast(&amp;self, event: Arc&lt;OnChainEvent&gt;, now_ms: u64) -&gt; Vec&lt;ExecutionSignal&gt; {
+        let mut signals = Vec::new();
+        for w in &amp;self.spokes {
+            if w.status.load(Ordering::Acquire) == STATUS_TRIPPED {
+                let since = now_ms.saturating_sub(w.tripped_at_ms.load(Ordering::Acquire));
+                if since &lt; self.cooldown_ms { continue; }
+                w.status.store(STATUS_DEGRADED, Ordering::Release);       // probe after cool-down
+            }
+            let started = Instant::now();
+            let res = catch_unwind(AssertUnwindSafe(|| w.node.on_event(&amp;event)));
+            let slow = started.elapsed().as_micros() &gt; self.budget_us;
+            match res {
+                Ok(out) if !slow =&gt; {
+                    w.failures.store(0, Ordering::Relaxed);
+                    w.status.store(STATUS_HEALTHY, Ordering::Release);    // recovery on success
+                    if let Some(sig) = out { signals.push(sig); }
+                }
+                _ =&gt; self.record_failure(w, now_ms),                       // panic or over budget
+            }
+        }
+        signals
+    }
+}
+</code></pre>
+<h3>7.4 src/partial.rs</h3>
+<pre><code class="language-text">// src/partial.rs  -- closed-path / partial-exit evaluation. All amounts in LOAN-TOKEN units (C-units fix).
+use alloy::primitives::{Address, U256};
+use crate::hub::SwapStep;
+
+pub struct ClosedPathCandidate { pub steps: Vec&lt;SwapStep&gt;, pub net_profit: U256, pub is_partial_exit: bool }
+
+pub trait PoolQuoteEngine {
+    fn simulate_swap(&amp;self, step: &amp;SwapStep, amount_in: U256) -&gt; Option&lt;U256&gt;;
+    fn find_direct_closing_step(&amp;self, token_in: Address, loan_token: Address) -&gt; Option&lt;SwapStep&gt;;
+    /// Total cost of an n-step route in LOAN-TOKEN units: L2 gas + L1 data fee + flash fee
+    /// (Balancer/Aave premium/V3 pool fee). The implementation converts wei -&gt; loan token.
+    fn estimate_cost_in_loan_token(&amp;self, num_steps: usize, loan_amount: U256) -&gt; Option&lt;U256&gt;;
+}
+
+pub fn evaluate_optimal_closed_path(
+    loan_token: Address, loan_amount: U256, full_steps: &amp;[SwapStep],
+    engine: &amp;dyn PoolQuoteEngine, max_steps: usize,
+) -&gt; Option&lt;ClosedPathCandidate&gt; {
+    if full_steps.is_empty() { return None; }
+    let mut best: Option&lt;ClosedPathCandidate&gt; = None;
+    let mut cur_amt = loan_amount;
+    let mut cur_token = loan_token;
+    let mut prefix: Vec&lt;SwapStep&gt; = Vec::new();
+    let total = full_steps.len();
+
+    for (idx, step) in full_steps.iter().enumerate() {
+        if prefix.len() &gt;= max_steps { break; }
+        if step.token_in != cur_token { break; }                       // broken route: stop, keep best so far
+        let out = match engine.simulate_swap(step, cur_amt) { Some(v) =&gt; v, None =&gt; break };
+        prefix.push(step.clone());
+        cur_amt = out;
+        cur_token = step.token_out;
+
+        let is_last = idx.saturating_add(1) == total;
+        let candidate: Option&lt;(Vec&lt;SwapStep&gt;, U256, bool)&gt; = if is_last {
+            if cur_token == loan_token { Some((prefix.clone(), cur_amt, false)) } else { None }
+        } else if idx &gt;= 1 &amp;&amp; prefix.len() &lt; max_steps {
+            engine.find_direct_closing_step(cur_token, loan_token).and_then(|close| {
+                if close.token_in != cur_token || close.token_out != loan_token { return None; }
+                let fin = engine.simulate_swap(&amp;close, cur_amt)?;
+                let mut closed = prefix.clone();
+                closed.push(close);
+                Some((closed, fin, true))
+            })
+        } else { None };
+
+        if let Some((steps, final_out, partial)) = candidate {
+            let cost = engine.estimate_cost_in_loan_token(steps.len(), loan_amount);
+            let net = cost
+                .and_then(|c| loan_amount.checked_add(c))
+                .and_then(|required| final_out.checked_sub(required));
+            if let Some(net) = net {
+                if !net.is_zero() &amp;&amp; best.as_ref().map_or(true, |b| net &gt; b.net_profit) {
+                    best = Some(ClosedPathCandidate { steps, net_profit: net, is_partial_exit: partial });
+                }
+            }
+        }
+    }
+    best
+}
+</code></pre>
+<h3>7.5 src/bidder.rs</h3>
+<pre><code class="language-text">// src/bidder.rs  -- saturating/checked bidding. Disabled by default until the ordering policy is verified (OC-09).
+#[derive(Debug, Clone)]
+pub struct PgaBidDecision {
+    pub should_execute: bool,
+    pub max_fee_per_gas_wei: u128,
+    pub priority_fee_per_gas_wei: u128,
+    pub expected_net_profit_wei: u128,
+}
+impl PgaBidDecision {
+    fn reject() -&gt; Self {
+        Self { should_execute: false, max_fee_per_gas_wei: 0, priority_fee_per_gas_wei: 0, expected_net_profit_wei: 0 }
+    }
+}
+
+pub struct DynamicBidder {
+    pub max_bribe_bps: u128,        // cap on bribe as a share of gross, e.g. 4000 = 40%
+    pub min_net_profit_wei: u128,
+    pub bidding_enabled: bool,      // false =&gt; priority fee 0
+}
+
+impl DynamicBidder {
+    /// gross_profit_wei MUST already be converted to wei; competitor fee MUST be measured or 0.
+    pub fn evaluate_bid(&amp;self, gross_profit_wei: u128, l2_gas_units: u128, l2_base_fee_wei: u128,
+                        l1_data_fee_wei: u128, competitor_priority_fee_wei: u128) -&gt; PgaBidDecision {
+        if l2_gas_units == 0 || gross_profit_wei &lt;= l1_data_fee_wei { return PgaBidDecision::reject(); }
+        let max_total_bribe = gross_profit_wei
+            .saturating_mul(self.max_bribe_bps).checked_div(10_000).unwrap_or(0).min(gross_profit_wei);
+        let max_prio = max_total_bribe.checked_div(l2_gas_units).unwrap_or(0);
+        let final_prio = if self.bidding_enabled {
+            competitor_priority_fee_wei.saturating_add(1_000_000).min(max_prio)
+        } else { 0 };
+        let l2_cost = l2_base_fee_wei.saturating_add(final_prio).saturating_mul(l2_gas_units);
+        let total_cost = l2_cost.saturating_add(l1_data_fee_wei);
+        let net = match gross_profit_wei.checked_sub(total_cost) {
+            Some(n) if n &gt; 0 =&gt; n,
+            _ =&gt; return PgaBidDecision::reject(),
+        };
+        let buffer = l2_base_fee_wei.saturating_mul(12).checked_div(10).unwrap_or(l2_base_fee_wei);
+        PgaBidDecision {
+            should_execute: net &gt;= self.min_net_profit_wei,
+            max_fee_per_gas_wei: buffer.saturating_add(final_prio),
+            priority_fee_per_gas_wei: final_prio,
+            expected_net_profit_wei: net,
+        }
+    }
+}
+</code></pre>
+<h3>7.6 src/physics.rs and src/age.rs</h3>
+<pre><code class="language-text">// src/physics.rs  -- heuristic decay; lambda is a TUNABLE parameter until the ordering policy is verified
+pub const PGA_LAMBDA_PER_MS: f64 = 0.005545177444479562;      // ln(2)/125, half-life 125 ms
+
+#[inline]
+pub fn edge_retained(delta_ms: u64) -&gt; f64 {
+    #[allow(clippy::cast_precision_loss)]
+    let t = delta_ms as f64;
+    (-PGA_LAMBDA_PER_MS * t).exp()
+}
+
+#[inline]
+pub fn decay_adjusted_profit_wei(gross_profit_wei: u128, delta_ms: u64) -&gt; u128 {
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    {
+        let v = (gross_profit_wei as f64) * edge_retained(delta_ms);   // factor &lt;= 1, so v &lt;= input
+        if v.is_finite() &amp;&amp; v &gt;= 0.0 { (v as u128).min(gross_profit_wei) } else { 0 }
+    }
+}
+
+// src/age.rs  -- ONE threshold table shared by code and spec (decision D-1)
+pub const FRESH_MAX_MS: u64 = 40;
+pub const WARM_MAX_MS: u64 = 110;
+pub const LIQ_AGING_MAX_MS: u64 = 250;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpportunityAge { Fresh, Warm, Aging, Expired }
+
+#[inline]
+pub fn classify_opportunity_age(delta_ms: u64, is_liquidation: bool) -&gt; OpportunityAge {
+    if delta_ms &lt;= FRESH_MAX_MS { OpportunityAge::Fresh }
+    else if delta_ms &lt;= WARM_MAX_MS { OpportunityAge::Warm }
+    else if is_liquidation &amp;&amp; delta_ms &lt;= LIQ_AGING_MAX_MS { OpportunityAge::Aging }
+    else { OpportunityAge::Expired }
+}
+</code></pre>
+<h3>7.7 src/flash.rs</h3>
+<pre><code class="language-text">// src/flash.rs  -- flash source selection. Returns None when the route is not executable as specified.
+use alloy::primitives::{Address, U256};
+use crate::hub::SwapStep;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlashLoanProvider {
+    UniswapV3ZeroHopCallback { pool: Address, zero_for_one: bool },
+    BalancerV2Vault,
+    AaveV3Pool,
+}
+
+#[derive(Debug, Clone)]
+pub struct FlashExecutionPlan {
+    pub provider: FlashLoanProvider,
+    /// Tier-0: hop 0 is executed by v3Pool.swap() itself, so this is steps[1..]. Tier-1/2: all steps.
+    pub remaining_hops: Vec&lt;SwapStep&gt;,
+    /// Token actually held when the executor strategy starts (Tier-0: steps[0].token_out).
+    pub start_token: Address,
+}
+
+pub fn select_optimal_flash_source(
+    loan_token: Address, loan_amount: U256, steps: &amp;[SwapStep], has_liquidation: bool,
+    balancer_liquidity: U256,                    // REAL on-chain Vault balance of loan_token
+    tier0_enabled: bool, v3_pool_allowed: &amp;dyn Fn(Address) -&gt; bool,
+) -&gt; Option&lt;FlashExecutionPlan&gt; {
+    if steps.is_empty() { return None; }
+    let closes = steps.last().map_or(false, |s| s.token_out == loan_token);
+
+    if tier0_enabled &amp;&amp; !has_liquidation &amp;&amp; steps.len() &gt;= 2 &amp;&amp; closes {
+        if let Some(first) = steps.first() {
+            if first.protocol_id == 1 &amp;&amp; first.token_in == loan_token &amp;&amp; first.token_in != first.token_out
+                &amp;&amp; v3_pool_allowed(first.pool)
+            {
+                let zero_for_one = first.token_in &lt; first.token_out;   // V3 orders token0 &lt; token1 by address
+                return Some(FlashExecutionPlan {
+                    provider: FlashLoanProvider::UniswapV3ZeroHopCallback { pool: first.pool, zero_for_one },
+                    remaining_hops: steps.get(1..)?.to_vec(),
+                    start_token: first.token_out,
+                });
+            }
+        }
+    }
+    let provider = if balancer_liquidity &gt;= loan_amount { FlashLoanProvider::BalancerV2Vault }
+                   else { FlashLoanProvider::AaveV3Pool };
+    Some(FlashExecutionPlan { provider, remaining_hops: steps.to_vec(), start_token: loan_token })
+}
+</code></pre>
+<h3>7.8 src/signer.rs</h3>
+<pre><code class="language-text">// src/signer.rs  -- single-flight wallets, lease-based nonces, no raw keys in memory structs (OC-05, OC-07)
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::Arc;
+use alloy::primitives::{Address, Bytes};
+use crate::simroom::VerifiedTx;
+
+/// Implemented by a keystore / KMS / hardware adapter. Never exposes the key.
+pub trait SignerHandle: Send + Sync {
+    fn sign(&amp;self, tx: &amp;VerifiedTx, nonce: u64, max_fee_per_gas: u128, priority_fee: u128) -&gt; Option&lt;Bytes&gt;;
+}
+
+pub struct ManagedWallet {
+    pub address: Address,
+    pub signer: Arc&lt;dyn SignerHandle&gt;,
+    pub nonce: AtomicU64,
+    pub in_flight: AtomicBool,
+}
+
+pub struct SignerPool { wallets: Vec&lt;ManagedWallet&gt;, cursor: AtomicUsize }
+
+/// Holding a Lease means exclusive use of the wallet. Dropping it releases the wallet WITHOUT
+/// consuming the nonce (a failed or rejected send leaves no gap).
+pub struct Lease&lt;&#39;a&gt; { pub wallet: &amp;&#39;a ManagedWallet, pub nonce: u64 }
+impl Drop for Lease&lt;&#39;_&gt; { fn drop(&amp;mut self) { self.wallet.in_flight.store(false, Ordering::Release); } }
+
+impl SignerPool {
+    pub fn new(wallets: Vec&lt;ManagedWallet&gt;) -&gt; Self { Self { wallets, cursor: AtomicUsize::new(0) } }
+
+    pub fn acquire(&amp;self) -&gt; Option&lt;Lease&lt;&#39;_&gt;&gt; {
+        let n = self.wallets.len();
+        let start = self.cursor.fetch_add(1, Ordering::Relaxed);
+        for off in 0..n {
+            let idx = start.wrapping_add(off).checked_rem(n)?;
+            let w = self.wallets.get(idx)?;
+            if w.in_flight.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok() {
+                return Some(Lease { wallet: w, nonce: w.nonce.load(Ordering::SeqCst) });
+            }
+        }
+        None
+    }
+
+    /// Call ONLY after the node accepted the transaction.
+    pub fn commit(&amp;self, lease: Lease&lt;&#39;_&gt;) {
+        let used = lease.nonce;
+        let _ = lease.wallet.nonce.compare_exchange(used, used.saturating_add(1), Ordering::SeqCst, Ordering::SeqCst);
+        // `lease` drops here and releases the wallet.
+    }
+
+    /// Authoritative resync from the chain&#39;s PENDING nonce; may move backwards.
+    pub fn resync(&amp;self, addr: Address, chain_pending: u64) {
+        for w in &amp;self.wallets { if w.address == addr { w.nonce.store(chain_pending, Ordering::SeqCst); } }
+    }
+
+    pub fn addresses(&amp;self) -&gt; Vec&lt;Address&gt; { self.wallets.iter().map(|w| w.address).collect() }
+}
+</code></pre>
+<h3>7.9 src/simroom.rs</h3>
+<pre><code class="language-text">// src/simroom.rs  -- simulation contract + guard + VerifiedTx seal (OC-01, OC-02)
+use alloy::primitives::{Address, Bytes, U256};
+
+pub struct UnsignedTx { pub to: Address, pub data: Bytes, pub gas_limit: u64 }
+
+/// Produced ONLY by `Simulator` implementations, never hand-built in main.rs.
+pub struct SimulationReport {
+    pub success: bool,
+    pub gas_used: u64,
+    pub recipient: Address,                  // observed profit recipient (from state/logs)
+    pub recipient_balance_before: U256,      // loan token
+    pub recipient_balance_after: U256,
+    pub executor_balance_after: U256,        // loan token left on the executor
+}
+
+/// Implementation requirements: revm over FORKED state at the target block (AlloyDB or equivalent),
+/// non-committing transact(), same calldata and sender as production, balances read before/after.
+pub trait Simulator {
+    fn run(&amp;self, block_number: u64, tx: &amp;UnsignedTx, recipient: Address, loan_token: Address) -&gt; Option&lt;SimulationReport&gt;;
+}
+
+/// Sealed: the only constructor is RuntimeInvariantGuard::verify, so the signer cannot be reached
+/// without a passing simulation.
+pub struct VerifiedTx { tx: UnsignedTx, _seal: () }
+impl VerifiedTx {
+    pub fn tx(&amp;self) -&gt; &amp;UnsignedTx { &amp;self.tx }
+    pub fn calldata(&amp;self) -&gt; &amp;Bytes { &amp;self.tx.data }
+}
+
+pub struct RuntimeInvariantGuard { pub profit_recipient: Address, pub max_gas_ceiling: u64 }
+
+impl RuntimeInvariantGuard {
+    pub fn verify(&amp;self, r: &amp;SimulationReport, pre_existing: U256, min_net_profit: U256, tx: UnsignedTx)
+        -&gt; Option&lt;VerifiedTx&gt;
+    {
+        if !r.success || r.gas_used &gt; self.max_gas_ceiling { return None; }
+        if r.recipient != self.profit_recipient { return None; }
+        if r.executor_balance_after != pre_existing { return None; }              // I-4
+        if min_net_profit.is_zero() { return None; }                              // I-5
+        let delta = r.recipient_balance_after.checked_sub(r.recipient_balance_before)?;
+        if delta &lt; min_net_profit { return None; }                                // I-5
+        Some(VerifiedTx { tx, _seal: () })
+    }
+}
+</code></pre>
+<h3>7.10 src/tx.rs</h3>
+<pre><code class="language-text">// src/tx.rs  -- calldata encoder. Route is validated before encoding; fee tiers are rejected, never truncated.
+use alloy::primitives::{Address, Bytes, Uint, I256, U160, U256};
+use alloy::sol;
+use alloy::sol_types::{SolCall, SolValue};
+use crate::constants::MAX_HOPS;
+use crate::flash::{FlashExecutionPlan, FlashLoanProvider};
+use crate::hub::{ExecutionSignal, SwapStep};
+
+pub const MIN_SQRT_RATIO_PLUS_ONE: u64 = 4_295_128_740;                      // TickMath.MIN_SQRT_RATIO + 1
+// TickMath.MAX_SQRT_RATIO - 1 = 1461446703485210103287273052203988822378723970341
+pub const MAX_SQRT_RATIO_MINUS_ONE_LIMBS: [u64; 3] = [0x5d951d5263988d25, 0xefd1fc6a50648849, 0x00000000fffd8963];
+
+sol! {
+    struct RouteHop { uint8 protocolId; address tokenIn; address tokenOut; uint24 feeTier; uint256 minAmountOut; }
+    struct ExecutionPayload {
+        bool hasLiquidation; address borrower; address collateralAsset; address debtAsset;
+        uint256 debtToCover; uint256 minNetProfit; uint256 deadline; RouteHop[] hops;
+    }
+    interface IMEVExecutor {
+        function executeViaUniV3Callback(address v3Pool, address repayToken, bool zeroForOne,
+            int256 amountSpecified, uint160 sqrtPriceLimitX96, bytes calldata payloadBytes) external;
+        function executeViaBalancer(address loanToken, uint256 loanAmount, bytes calldata payloadBytes) external;
+        function executeViaAave(address loanToken, uint256 loanAmount, bytes calldata payloadBytes) external;
+    }
+}
+
+/// Mirrors SC-06. start_token: Tier-0 = steps[0].token_out (plan.start_token), Tier-1/2 = loan token.
+pub fn validate_route(loan_token: Address, start_token: Address, hops: &amp;[SwapStep]) -&gt; bool {
+    if hops.len() &gt; MAX_HOPS { return false; }
+    let mut cur = start_token;
+    for h in hops { if h.token_in != cur { return false; } cur = h.token_out; }
+    cur == loan_token
+}
+
+pub fn encode_executor_calldata(
+    signal: &amp;ExecutionSignal, plan: &amp;FlashExecutionPlan, min_net_profit: U256, deadline_unix: U256,
+) -&gt; Option&lt;Bytes&gt; {
+    if !validate_route(signal.loan_token, plan.start_token, &amp;plan.remaining_hops) { return None; }
+    if min_net_profit.is_zero() { return None; }
+
+    let mut hops: Vec&lt;RouteHop&gt; = Vec::with_capacity(plan.remaining_hops.len());
+    for s in &amp;plan.remaining_hops {
+        if s.fee_or_tier &gt; 0x00FF_FFFF { return None; }                          // reject, never truncate
+        hops.push(RouteHop {
+            protocolId: s.protocol_id, tokenIn: s.token_in, tokenOut: s.token_out,
+            feeTier: Uint::&lt;24, 1&gt;::try_from(u64::from(s.fee_or_tier)).ok()?,
+            minAmountOut: s.min_out,
+        });
+    }
+    let (has_liq, borrower, col, debt, cover) = match &amp;signal.liquidation {
+        Some(l) =&gt; (true, l.borrower, l.collateral_asset, l.debt_asset, l.debt_to_cover),
+        None =&gt; (false, Address::ZERO, Address::ZERO, Address::ZERO, U256::ZERO),
+    };
+    let payload = ExecutionPayload { hasLiquidation: has_liq, borrower, collateralAsset: col, debtAsset: debt,
+        debtToCover: cover, minNetProfit: min_net_profit, deadline: deadline_unix, hops };
+    let payload_bytes = Bytes::from(payload.abi_encode());
+
+    let calldata = match plan.provider {
+        FlashLoanProvider::UniswapV3ZeroHopCallback { pool, zero_for_one } =&gt; {
+            if has_liq { return None; }
+            let limit = if zero_for_one { U160::from(MIN_SQRT_RATIO_PLUS_ONE) }
+                        else { U160::from_limbs(MAX_SQRT_RATIO_MINUS_ONE_LIMBS) };
+            let amt = I256::try_from(signal.loan_amount).ok()?;
+            if !amt.is_positive() { return None; }
+            IMEVExecutor::executeViaUniV3CallbackCall { v3Pool: pool, repayToken: signal.loan_token,
+                zeroForOne: zero_for_one, amountSpecified: amt, sqrtPriceLimitX96: limit,
+                payloadBytes: payload_bytes }.abi_encode()
+        }
+        FlashLoanProvider::BalancerV2Vault =&gt; IMEVExecutor::executeViaBalancerCall {
+            loanToken: signal.loan_token, loanAmount: signal.loan_amount, payloadBytes: payload_bytes }.abi_encode(),
+        FlashLoanProvider::AaveV3Pool =&gt; IMEVExecutor::executeViaAaveCall {
+            loanToken: signal.loan_token, loanAmount: signal.loan_amount, payloadBytes: payload_bytes }.abi_encode(),
+    };
+    Some(Bytes::from(calldata))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn max_ratio_limbs_match_tickmath() {
+        let v = U160::from_limbs(MAX_SQRT_RATIO_MINUS_ONE_LIMBS);
+        assert_eq!(v.to_string(), &#34;1461446703485210103287273052203988822378723970341&#34;);
+    }
+}
+</code></pre>
+<h3>7.11 src/math.rs</h3>
+<pre><code class="language-text">// src/math.rs  -- Rust mirror of Solidity MEVMath. Rule (MP-01): Solidity revert == Rust None.
+use alloy::primitives::{U256, U512};
+
+pub const BPS: u64 = 10_000;
+fn bps() -&gt; U256 { U256::from(BPS) }
+fn one() -&gt; U256 { U256::from(1u64) }
+
+pub fn sqrt(x: U256) -&gt; U256 {
+    if x.is_zero() { return U256::ZERO; }
+    let mut z = (x &gt;&gt; 1usize).wrapping_add(x &amp; one());            // ceil(x/2): cannot overflow
+    let mut y = x;
+    while z &lt; y { y = z; z = (x / z).wrapping_add(z) &gt;&gt; 1usize; } // x/z + z &lt; 2^256 for the ceil seed
+    y
+}
+
+fn mul512(a: U256, b: U256) -&gt; U512 { U512::from(a).wrapping_mul(U512::from(b)) }  // never wraps for two U256
+
+/// Exact floor(sqrt(v)) for v &lt; 2^512, digit by digit (reference-grade; replace by a tested
+/// integer-Newton only after differential tests prove equality).
+fn sqrt512(v: U512) -&gt; U256 {
+    let mut r = U256::ZERO;
+    let mut bit = one() &lt;&lt; 255usize;
+    while !bit.is_zero() {
+        let cand = r | bit;
+        if mul512(cand, cand) &lt;= v { r = cand; }
+        bit &gt;&gt;= 1usize;
+    }
+    r
+}
+
+pub fn sqrt_product(a: U256, b: U256) -&gt; U256 {
+    if a.is_zero() || b.is_zero() { return U256::ZERO; }
+    sqrt512(mul512(a, b))
+}
+
+/// None == FactorTooLarge revert. Exact for factors &lt;= 2^128 - 1.
+pub fn sqrt_product4(a: U256, b: U256, c: U256, d: U256) -&gt; Option&lt;U256&gt; {
+    if a.is_zero() || b.is_zero() || c.is_zero() || d.is_zero() { return Some(U256::ZERO); }
+    let max128 = (one() &lt;&lt; 128usize).wrapping_sub(one());
+    if a &gt; max128 || b &gt; max128 || c &gt; max128 || d &gt; max128 { return None; }
+    Some(sqrt512(mul512(a.wrapping_mul(b), c.wrapping_mul(d))))   // each product &lt; 2^256
+}
+
+pub fn get_amount_out(amount_in: U256, reserve_in: U256, reserve_out: U256, fee_bps: U256) -&gt; Option&lt;U256&gt; {
+    if fee_bps &gt; bps() { return None; }
+    if amount_in.is_zero() || reserve_in.is_zero() || reserve_out.is_zero() { return Some(U256::ZERO); }
+    let aif = amount_in.checked_mul(bps().wrapping_sub(fee_bps))?;
+    let num = aif.checked_mul(reserve_out)?;
+    let den = reserve_in.checked_mul(bps())?.checked_add(aif)?;
+    num.checked_div(den)
+}
+
+pub fn get_amount_in(amount_out: U256, reserve_in: U256, reserve_out: U256, fee_bps: U256) -&gt; Option&lt;U256&gt; {
+    if fee_bps &gt;= bps() { return None; }
+    if amount_out.is_zero() || reserve_in.is_zero() || reserve_out.is_zero() { return Some(U256::ZERO); }
+    if amount_out &gt;= reserve_out { return None; }
+    let num = reserve_in.checked_mul(amount_out)?.checked_mul(bps())?;
+    let den = reserve_out.wrapping_sub(amount_out).checked_mul(bps().wrapping_sub(fee_bps))?;
+    num.checked_div(den)?.checked_add(one())
+}
+
+pub fn price_impact_bps(amount_in: U256, amount_out: U256, reserve_in: U256, reserve_out: U256) -&gt; Option&lt;U256&gt; {
+    if amount_in.is_zero() || reserve_in.is_zero() || reserve_out.is_zero() { return Some(U256::ZERO); }
+    let num = amount_out.checked_mul(reserve_in)?;
+    let den = amount_in.checked_mul(reserve_out)?;
+    if num &gt;= den { return Some(U256::ZERO); }
+    den.wrapping_sub(num).checked_mul(bps())?.checked_div(den)
+}
+
+/// Closed-form optimal token0 input for a two-pool cycle (same fee on both pools).
+/// x* = den*(num*s - den*aX*bY) / (num*(den*bY + num*aY)),  s = sqrt(aX*bX*aY*bY).
+pub fn optimal_input_0_for_1(a_x: U256, a_y: U256, b_y: U256, b_x: U256, fee_bps: U256) -&gt; Option&lt;U256&gt; {
+    let den = bps();
+    if a_x.is_zero() || a_y.is_zero() || b_y.is_zero() || b_x.is_zero() || fee_bps &gt;= den { return Some(U256::ZERO); }
+    let num = den.wrapping_sub(fee_bps);
+    let s = sqrt_product4(a_x, b_x, a_y, b_y)?;
+    let scaled = num.checked_mul(s)?;
+    let base = den.checked_mul(a_x)?.checked_mul(b_y)?;
+    if scaled &lt;= base { return Some(U256::ZERO); }
+    let top = den.checked_mul(scaled.wrapping_sub(base))?;
+    let bottom = num.checked_mul(den.checked_mul(b_y)?.checked_add(num.checked_mul(a_y)?)?)?;
+    top.checked_div(bottom)
+}
+
+pub fn estimate_profit(x: U256, a_x: U256, a_y: U256, b_y: U256, b_x: U256, fee_bps: U256) -&gt; Option&lt;U256&gt; {
+    let out1 = get_amount_out(x, a_x, a_y, fee_bps)?;
+    let out2 = get_amount_out(out1, b_y, b_x, fee_bps)?;
+    Some(if out2 &gt; x { out2.wrapping_sub(x) } else { U256::ZERO })
+}
+
+/// MP-05: never trust the closed form alone; check neighbors and keep the best.
+pub fn optimal_input_refined(a_x: U256, a_y: U256, b_y: U256, b_x: U256, fee_bps: U256) -&gt; Option&lt;(U256, U256)&gt; {
+    let x0 = optimal_input_0_for_1(a_x, a_y, b_y, b_x, fee_bps)?;
+    if x0.is_zero() { return Some((U256::ZERO, U256::ZERO)); }
+    let mut best = (x0, estimate_profit(x0, a_x, a_y, b_y, b_x, fee_bps)?);
+    for d in [1u64, 2, 10] {
+        let d = U256::from(d);
+        for cand in [x0.checked_add(d), x0.checked_sub(d)].into_iter().flatten() {
+            if cand.is_zero() { continue; }
+            if let Some(p) = estimate_profit(cand, a_x, a_y, b_y, b_x, fee_bps) {
+                if p &gt; best.1 { best = (cand, p); }
+            }
+        }
+    }
+    Some(best)
+}
+</code></pre>
+<h3>7.12 src/feed.rs</h3>
+<pre><code class="language-text">// src/feed.rs  -- Arbitrum feed decoding; must never panic (OC-04). Import paths: verify against alloy 0.8.
+use alloy::consensus::TxEnvelope;
+use alloy::eips::eip2718::Decodable2718;
+use alloy::rlp::Decodable;
+
+pub const KIND_BATCH: u8 = 0x03;       // L2MessageKind: batch of length-prefixed sub-messages (8-byte BE length)
+pub const KIND_SIGNED_TX: u8 = 0x04;   // L2MessageKind: signed transaction (typed or legacy RLP follows)
+pub const KIND_HEARTBEAT: u8 = 0x06;
+pub const MAX_DEPTH: u8 = 4;
+
+#[derive(Debug)]
+pub enum FeedError { Truncated, TooDeep, UnsupportedKind(u8) }
+
+/// Collects the raw signed-tx bytes (type byte 0x04 already stripped) from a single or batched message.
+pub fn extract_signed_txs&lt;&#39;a&gt;(msg: &amp;&#39;a [u8], depth: u8, out: &amp;mut Vec&lt;&amp;&#39;a [u8]&gt;) -&gt; Result&lt;(), FeedError&gt; {
+    if depth &gt; MAX_DEPTH { return Err(FeedError::TooDeep); }
+    let (kind, rest) = msg.split_first().ok_or(FeedError::Truncated)?;
+    match *kind {
+        KIND_SIGNED_TX =&gt; { out.push(rest); Ok(()) }          // the most common case: a single tx
+        KIND_BATCH =&gt; {
+            let mut pos = rest;
+            while !pos.is_empty() {
+                if pos.len() &lt; 8 { return Err(FeedError::Truncated); }
+                let (len_bytes, tail) = pos.split_at(8);
+                let raw: [u8; 8] = len_bytes.try_into().map_err(|_| FeedError::Truncated)?;
+                let len = usize::try_from(u64::from_be_bytes(raw)).map_err(|_| FeedError::Truncated)?;
+                if tail.len() &lt; len { return Err(FeedError::Truncated); }   // no wrap: compared, not added
+                let (item, next) = tail.split_at(len);
+                extract_signed_txs(item, depth.saturating_add(1), out)?;    // nested batches supported
+                pos = next;
+            }
+            Ok(())
+        }
+        KIND_HEARTBEAT =&gt; Ok(()),
+        other =&gt; Err(FeedError::UnsupportedKind(other)),     // caller counts and alerts; never aborts the stream
+    }
+}
+
+pub fn decode_tx_bytes(raw: &amp;[u8]) -&gt; Option&lt;TxEnvelope&gt; {
+    let first = raw.first().copied()?;
+    let mut buf = raw;
+    if first &lt; 0x80 { TxEnvelope::decode_2718(&amp;mut buf).ok() }     // EIP-2718 typed
+    else { TxEnvelope::decode(&amp;mut buf).ok() }                      // legacy RLP
+}
+</code></pre>
+<h3>7.13 src/main.rs</h3>
+<pre><code class="language-text">// src/main.rs  -- reference pipeline. No step may be skipped; nothing here fabricates a SimulationReport.
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
+use alloy::primitives::{Address, Bytes, U256};
+use crate::age::{classify_opportunity_age, OpportunityAge};
+use crate::bidder::DynamicBidder;
+use crate::flash::select_optimal_flash_source;
+use crate::hub::{ExecutionSignal, Governor, OnChainEvent};
+use crate::physics::decay_adjusted_profit_wei;
+use crate::signer::SignerPool;
+use crate::simroom::{RuntimeInvariantGuard, Simulator, UnsignedTx};
+use crate::tx::encode_executor_calldata;
+
+pub struct EngineConfig {
+    pub shadow_mode: bool,
+    pub executor: Address,
+    pub profit_recipient: Address,       // cold wallet; MUST equal executor.profitRecipient() (self-check)
+    pub max_gas_ceiling: u64,
+    pub tier0_enabled: bool,
+    pub deadline_secs: u64,              // &lt;= MAX_DEADLINE_HORIZON_SECS
+    pub min_profit_bps_of_expected: u128,// minNetProfit = max(floor, expected * bps / 10_000)
+}
+
+/// Everything the pipeline needs from the chain; implementations must use real data, not constants.
+pub trait ChainView {
+    fn block_number(&amp;self) -&gt; u64;
+    fn balancer_liquidity(&amp;self, token: Address) -&gt; U256;
+    fn l2_base_fee_wei(&amp;self) -&gt; u128;
+    fn l1_data_fee_wei(&amp;self, calldata: &amp;Bytes) -&gt; Option&lt;u128&gt;;          // NodeInterface-based, verified
+    fn competitor_priority_fee_wei(&amp;self) -&gt; u128;                        // measured from the feed, else 0
+    fn value_in_wei(&amp;self, token: Address, amount: U256) -&gt; Option&lt;u128&gt;; // price conversion
+    fn min_profit_floor(&amp;self, token: Address) -&gt; U256;                   // read from the contract
+    fn v3_pool_allowed(&amp;self, pool: Address) -&gt; bool;                     // read from the contract
+}
+pub trait Sender { fn send_raw(&amp;self, raw: Bytes) -&gt; Result&lt;(), String&gt;; fn pending_nonce(&amp;self, a: Address) -&gt; Option&lt;u64&gt;; }
+pub trait ExecutorReader {
+    fn chain_id(&amp;self) -&gt; u64;
+    fn profit_recipient(&amp;self) -&gt; Address;
+    fn is_operator(&amp;self, who: Address) -&gt; bool;
+    fn max_loan(&amp;self, token: Address) -&gt; U256;
+    fn code_hash(&amp;self) -&gt; [u8; 32];
+}
+
+/// OC-08: fail closed.
+pub fn startup_self_check(cfg: &amp;EngineConfig, r: &amp;dyn ExecutorReader, signers: &amp;SignerPool,
+                          traded: &amp;[Address], expected_code_hash: [u8; 32]) -&gt; eyre::Result&lt;()&gt; {
+    eyre::ensure!(r.chain_id() == crate::constants::ARBITRUM_CHAIN_ID, &#34;wrong chain id&#34;);
+    eyre::ensure!(r.profit_recipient() == cfg.profit_recipient, &#34;profit recipient mismatch&#34;);
+    eyre::ensure!(r.code_hash() == expected_code_hash, &#34;executor code hash mismatch&#34;);
+    for a in signers.addresses() { eyre::ensure!(r.is_operator(a), &#34;signer {a} is not an operator&#34;); }
+    for t in traded { eyre::ensure!(!r.max_loan(*t).is_zero(), &#34;token {t} has maxLoan == 0&#34;); }
+    eyre::ensure!(cfg.deadline_secs &lt;= crate::constants::MAX_DEADLINE_HORIZON_SECS, &#34;deadline horizon too large&#34;);
+    Ok(())
+}
+
+pub enum Outcome { Dropped(&amp;&#39;static str), ShadowOk, Sent }
+
+pub fn handle_signal(cfg: &amp;EngineConfig, sig: &amp;ExecutionSignal, now_ms: u64, chain: &amp;dyn ChainView,
+    bidder: &amp;DynamicBidder, guard: &amp;RuntimeInvariantGuard, sim: &amp;dyn Simulator,
+    signers: &amp;SignerPool, sender: &amp;dyn Sender) -&gt; Outcome
+{
+    let delta_ms = now_ms.saturating_sub(sig.event_timestamp_ms);
+    let is_liq = sig.liquidation.is_some();
+    if classify_opportunity_age(delta_ms, is_liq) == OpportunityAge::Expired { return Outcome::Dropped(&#34;expired&#34;); }
+
+    let plan = match select_optimal_flash_source(sig.loan_token, sig.loan_amount, &amp;sig.steps, is_liq,
+        chain.balancer_liquidity(sig.loan_token), cfg.tier0_enabled, &amp;|p| chain.v3_pool_allowed(p)) {
+        Some(p) =&gt; p, None =&gt; return Outcome::Dropped(&#34;no plan&#34;) };
+
+    let floor = chain.min_profit_floor(sig.loan_token);
+    let frac = sig.expected_profit_loan_token
+        .checked_mul(U256::from(cfg.min_profit_bps_of_expected)).and_then(|v| v.checked_div(U256::from(10_000u64)))
+        .unwrap_or(U256::ZERO);
+    let min_net = if frac &gt; floor { frac } else { floor };
+
+    let deadline = U256::from((now_ms / 1000).saturating_add(cfg.deadline_secs));
+    let calldata = match encode_executor_calldata(sig, &amp;plan, min_net, deadline) {
+        Some(c) =&gt; c, None =&gt; return Outcome::Dropped(&#34;encode/route invalid&#34;) };
+    let unsigned = UnsignedTx { to: cfg.executor, data: calldata.clone(), gas_limit: cfg.max_gas_ceiling };
+
+    let report = match sim.run(chain.block_number(), &amp;unsigned, cfg.profit_recipient, sig.loan_token) {
+        Some(r) =&gt; r, None =&gt; return Outcome::Dropped(&#34;simulation failed&#34;) };
+    let gas_used = report.gas_used;
+    let realized_profit = report.recipient_balance_after.saturating_sub(report.recipient_balance_before);
+    let verified = match guard.verify(&amp;report, U256::ZERO /* pre-existing: executor holds none at rest */, min_net, unsigned) {
+        Some(v) =&gt; v, None =&gt; return Outcome::Dropped(&#34;guard rejected&#34;) };
+
+    let gross_wei = match chain.value_in_wei(sig.loan_token, realized_profit) {
+        Some(v) =&gt; v, None =&gt; return Outcome::Dropped(&#34;no price&#34;) };
+    let decayed = decay_adjusted_profit_wei(gross_wei, delta_ms);
+    let l1 = match chain.l1_data_fee_wei(&amp;calldata) { Some(v) =&gt; v, None =&gt; return Outcome::Dropped(&#34;no l1 fee&#34;) };
+    let bid = bidder.evaluate_bid(decayed, u128::from(gas_used), chain.l2_base_fee_wei(), l1,
+                                  chain.competitor_priority_fee_wei());
+    if !bid.should_execute { return Outcome::Dropped(&#34;not profitable after costs&#34;); }
+    if cfg.shadow_mode { return Outcome::ShadowOk; }
+
+    let lease = match signers.acquire() { Some(l) =&gt; l, None =&gt; return Outcome::Dropped(&#34;no wallet free&#34;) };
+    let raw = match lease.wallet.signer.sign(&amp;verified, lease.nonce, bid.max_fee_per_gas_wei, bid.priority_fee_per_gas_wei) {
+        Some(r) =&gt; r, None =&gt; return Outcome::Dropped(&#34;sign failed&#34;) };
+    match sender.send_raw(raw) {
+        Ok(()) =&gt; { signers.commit(lease); Outcome::Sent }
+        Err(_) =&gt; { let addr = lease.wallet.address; drop(lease);
+                    if let Some(n) = sender.pending_nonce(addr) { signers.resync(addr, n); }
+                    Outcome::Dropped(&#34;send failed&#34;) }
+    }
+}
+
+// main(): load config -&gt; build adapters -&gt; startup_self_check -&gt; connect feed (feed.rs) -&gt; for each
+// message: extract_signed_txs -&gt; decode -&gt; build OnChainEvent -&gt; governor.broadcast(now_ms) -&gt;
+// handle_signal for each signal -&gt; reconcile executed txs (OP-02) and update circuit breakers (OP-01).
+// NOTE: how an OnChainEvent becomes an ExecutionSignal (the spokes&#39; detection logic) is NOT specified
+// by v10.5 and is out of scope here (decision D-6).
+</code></pre>
+<h3>7.14 Notes on the lab models</h3>
+<p>ConstantProductAMM and ArbitrageRouter are simulation models, not production contracts. If kept: remove the dead check amountOut &gt;= reserve, the unused error Overflow and the unused &quot;using MEVMath for uint256&quot;; give addLiquidity no pretense of safety (it has no token transfers); and make ArbitrageRouter use the same checked semantics as math.rs. Huff and Yul: see MP-06; the Yul object needs a runtime sub-object to be deployable, and both must reproduce getAmountOut exactly (0 for a zero reserve, revert for fee &gt; 10,000 and on overflow) or be dropped.</p>
+<h3>7.15 contracts/src/libraries/MEVMath.sol</h3>
+<pre><code class="language-text">// SPDX-License-Identifier: MIT
+pragma solidity 0.8.34;       // pin exactly; must match the version used for Annex build (SC-11)
+
+library MEVMath {
+    uint256 internal constant BPS = 10_000;
+    error FeeTooHigh(uint256 feeBps);
+    error FactorTooLarge();
+    error InsufficientLiquidity();
+
+    function max(uint256 a, uint256 b) internal pure returns (uint256) { return a &gt;= b ? a : b; }
+    function min(uint256 a, uint256 b) internal pure returns (uint256) { return a &lt;= b ? a : b; }
+
+    function sqrt(uint256 x) internal pure returns (uint256 z) {
+        if (x == 0) return 0;
+        z = (x &gt;&gt; 1) + (x &amp; 1);
+        uint256 y = x;
+        while (z &lt; y) { y = z; z = (x / z + z) / 2; }
+        return y;
+    }
+
+    function sqrtProduct(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0 || b == 0) return 0;
+        unchecked { if (a &lt;= type(uint256).max / b) return sqrt(a * b); }
+        (uint256 hi, uint256 lo) = _mul512(a, b);
+        return _sqrt512(hi, lo);
+    }
+
+    /// floor(sqrt(a*b*c*d)); exact for factors &lt;= 2^128-1, reverts otherwise (never approximates).
+    function sqrtProduct4(uint256 a, uint256 b, uint256 c, uint256 d) internal pure returns (uint256) {
+        if (a == 0 || b == 0 || c == 0 || d == 0) return 0;
+        if (a &gt; type(uint128).max || b &gt; type(uint128).max || c &gt; type(uint128).max || d &gt; type(uint128).max)
+            revert FactorTooLarge();
+        unchecked { (uint256 hi, uint256 lo) = _mul512(a * b, c * d); return _sqrt512(hi, lo); }
+    }
+
+    function _mul512(uint256 a, uint256 b) private pure returns (uint256 hi, uint256 lo) {
+        assembly (&#34;memory-safe&#34;) {
+            let mm := mulmod(a, b, not(0))
+            lo := mul(a, b)
+            hi := sub(sub(mm, lo), lt(mm, lo))
+        }
+    }
+
+    function _sqrt512(uint256 hi, uint256 lo) private pure returns (uint256 r) {
+        uint256 bit = 1 &lt;&lt; 255;
+        while (bit &gt; 0) {
+            uint256 candidate = r | bit;
+            (uint256 ch, uint256 cl) = _mul512(candidate, candidate);
+            if (ch &lt; hi || (ch == hi &amp;&amp; cl &lt;= lo)) r = candidate;
+            bit &gt;&gt;= 1;
+        }
+    }
+
+    function getAmountOut(uint256 amountIn, uint256 reserveIn, uint256 reserveOut, uint256 feeBps)
+        internal pure returns (uint256)
+    {
+        if (feeBps &gt; BPS) revert FeeTooHigh(feeBps);
+        if (amountIn == 0 || reserveIn == 0 || reserveOut == 0) return 0;
+        uint256 aif = amountIn * (BPS - feeBps);
+        return (aif * reserveOut) / (reserveIn * BPS + aif);
+    }
+
+    function getAmountIn(uint256 amountOut, uint256 reserveIn, uint256 reserveOut, uint256 feeBps)
+        internal pure returns (uint256)
+    {
+        if (feeBps &gt;= BPS) revert FeeTooHigh(feeBps);
+        if (amountOut == 0 || reserveIn == 0 || reserveOut == 0) return 0;
+        if (amountOut &gt;= reserveOut) revert InsufficientLiquidity();
+        return (reserveIn * amountOut * BPS) / ((reserveOut - amountOut) * (BPS - feeBps)) + 1;
+    }
+
+    function priceImpactBps(uint256 amountIn, uint256 amountOut, uint256 reserveIn, uint256 reserveOut)
+        internal pure returns (uint256)
+    {
+        if (amountIn == 0 || reserveIn == 0 || reserveOut == 0) return 0;
+        uint256 num = amountOut * reserveIn;
+        uint256 den = amountIn * reserveOut;
+        if (num &gt;= den) return 0;
+        return ((den - num) * BPS) / den;
+    }
+}
+</code></pre>
+<h3>7.16 contracts/src/MEVExecutor.sol (merged final)</h3>
+<blockquote>
+<p><strong>Note:</strong> Role model, limits (maxLoan, pool and hop-token whitelists, MAX_HOPS, deadline horizon, per-token minProfitFloor), route validation, callback-executed flag, events, pause and the corrected _safeApprove. Admin setters for hop tokens and floors are included. Note: allowedHopToken must contain every hop tokenOut including the repay token.</p>
+</blockquote>
+<pre><code class="language-text">// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;   // build with evm_version = &#34;cancun&#34; (EIP-1153)
+
+interface IERC20 { function balanceOf(address a) external view returns (uint256); }
+interface IBalancerVault {
+    function flashLoan(address recipient, address[] memory tokens,
+                       uint256[] memory amounts, bytes memory userData) external;
+}
+interface IAaveV3Pool {
+    function flashLoanSimple(address receiver, address asset, uint256 amount,
+                             bytes calldata params, uint16 referralCode) external;
+    function liquidationCall(address collateral, address debt, address user,
+                             uint256 debtToCover, bool receiveAToken) external;
+}
+interface IUniV3Pool {
+    function token0() external view returns (address);
+    function token1() external view returns (address);
+    function swap(address recipient, bool zeroForOne, int256 amountSpecified,
+                  uint160 sqrtPriceLimitX96, bytes calldata data)
+        external returns (int256 amount0, int256 amount1);
+}
+interface IUniV3Router {
+    struct ExactInputSingleParams {
+        address tokenIn; address tokenOut; uint24 fee; address recipient;
+        uint256 deadline; uint256 amountIn; uint256 amountOutMinimum; uint160 sqrtPriceLimitX96;
+    }
+    function exactInputSingle(ExactInputSingleParams calldata p)
+        external payable returns (uint256 amountOut);
+}
+interface ICamelotAlgebraRouter {
+    struct ExactInputSingleParams {
+        address tokenIn; address tokenOut; address recipient; uint256 deadline;
+        uint256 amountIn; uint256 amountOutMinimum; uint160 limitSqrtPrice;
+    }
+    function exactInputSingle(ExactInputSingleParams calldata p)
+        external payable returns (uint256 amountOut);
+}
+interface IUniV2Router {
+    function swapExactTokensForTokens(uint256 amountIn, uint256 amountOutMin,
+        address[] calldata path, address to, uint256 deadline)
+        external returns (uint256[] memory amounts);
+}
+
+contract MEVExecutor {
+    // ---- roles (v10.6: executor key is NOT the profit sink and NOT the admin) ----
+    address public immutable admin;            // cold key / multisig / timelock
+    address public immutable guardian;         // may pause only
+    address public immutable profitRecipient;  // cold address, receives all profit
+    mapping(address =&gt; bool)    public isOperator;    // hot execution keys (SignerPool)
+    mapping(address =&gt; bool)    public allowedV3Pool; // whitelist for Tier-0
+    mapping(address =&gt; uint256) public maxLoan;       // per repay token; 0 = disabled
+    bool public paused;
+    mapping(address =&gt; uint256) public minProfitFloor;     // per repay token
+    mapping(address =&gt; bool)    public allowedHopToken;    // every hop tokenOut (incl. the repay token)
+    uint256 public constant MAX_HOPS = 4;
+    uint256 public constant MAX_DEADLINE_HORIZON = 30;     // seconds
+
+    event Executed(address indexed repayToken, uint256 profit);
+    event OperatorSet(address indexed who, bool ok);
+    event PoolSet(address indexed pool, bool ok);
+    event HopTokenSet(address indexed token, bool ok);
+    event MaxLoanSet(address indexed token, uint256 cap);
+    event MinProfitFloorSet(address indexed token, uint256 floor);
+    event PausedSet(bool paused, address indexed by);
+
+    address public constant BALANCER_VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
+    address public constant AAVE_V3_POOL   = 0x794a61358D6845594F94dc1DB02A252b5b4814aD;
+    address public constant UNIV3_ROUTER   = 0xE592427A0AEce92De3Edee1F18E0157C05861564;
+    address public constant CAMELOT_ROUTER = 0x1F721E2E82F6676FCE4eA07A5958cF098D339e18;
+    address public constant UNIV2_ROUTER   = 0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24;
+
+    // EIP-1153 transient slots
+    uint256 private constant REENTRANCY_SLOT           = 0x929eee149b4bd21268;
+    uint256 private constant EXPECTED_CALLBACK_SLOT    = 0x82f49447d8a07e3bd9;
+    uint256 private constant EXPECTED_REPAY_TOKEN_SLOT = 0x559fe8253a0e49e654;
+    uint256 private constant PRE_BALANCE_SLOT          = 0x4166549f7aab2e75be;
+    uint256 private constant CALLBACK_DONE_SLOT        = 0x1c7e1a6b2d93f05a44;
+
+    struct RouteHop { uint8 protocolId; address tokenIn; address tokenOut;
+                      uint24 feeTier; uint256 minAmountOut; }
+    struct ExecutionPayload {
+        bool hasLiquidation; address borrower; address collateralAsset; address debtAsset;
+        uint256 debtToCover; uint256 minNetProfit; uint256 deadline; RouteHop[] hops;
+    }
+    struct Ctx {                 // avoids stack-too-deep and carries BOTH tokens
+        address repayToken;      // token we owe back to the lender
+        address startToken;      // token we actually received first
+        uint256 startingAmount;  // amount of startToken received
+        uint256 requiredRepay;   // amount of repayToken owed
+        uint256 preBalance;      // contract balance of repayToken before the loan
+        bool    allowLiquidation;
+    }
+
+    error Unauthorized(); error Paused(); error ReentrancyDetected();
+    error InvalidCallbackDelta(); error RepayTokenMismatch();
+    error UnsupportedProtocol(uint8 protocolId);
+    error SafeTransferFailed(); error SafeApproveFailed();
+    error DeadlineExpired(uint256 deadline, uint256 currentTimestamp);
+    error InsufficientProfit(uint256 finalBal, uint256 requiredBal);
+    error PoolNotAllowed(); error LoanCapExceeded(); error BadRoute();
+    error TooManyHops(); error DeadlineTooFar(); error MinProfitBelowFloor(); error TokenNotAllowed();
+    error CallbackNotExecuted(); error LiquidationNotAllowed();
+    error ZeroAddress(); error ZeroAmount();
+
+    modifier onlyAdmin()    { if (msg.sender != admin) revert Unauthorized(); _; }
+    modifier onlyOperator() { if (!isOperator[msg.sender]) revert Unauthorized(); _; }
+    modifier whenNotPaused(){ if (paused) revert Paused(); _; }
+    modifier nonReentrantCallback() {
+        uint256 locked;
+        assembly { locked := tload(REENTRANCY_SLOT) if iszero(locked) { tstore(REENTRANCY_SLOT, 1) } }
+        if (locked != 0) revert ReentrancyDetected();
+        _;
+        assembly { tstore(REENTRANCY_SLOT, 0) }
+    }
+
+    constructor(address admin_, address guardian_, address profitRecipient_) {
+        if (admin_ == address(0) || guardian_ == address(0) || profitRecipient_ == address(0))
+            revert ZeroAddress();
+        admin = admin_; guardian = guardian_; profitRecipient = profitRecipient_;
+    }
+
+    // ---------------- admin surface (no fund-moving power except sweep to recipient) ----
+    function setOperator(address who, bool ok) external onlyAdmin { isOperator[who] = ok; emit OperatorSet(who, ok); }
+    function setV3Pool(address pool, bool ok)  external onlyAdmin { allowedV3Pool[pool] = ok; emit PoolSet(pool, ok); }
+    function setHopToken(address t, bool ok) external onlyAdmin { allowedHopToken[t] = ok; emit HopTokenSet(t, ok); }
+    function setMinProfitFloor(address t, uint256 f) external onlyAdmin { minProfitFloor[t] = f; emit MinProfitFloorSet(t, f); }
+    function setMaxLoan(address token, uint256 cap) external onlyAdmin { maxLoan[token] = cap; emit MaxLoanSet(token, cap); }
+    function pause() external {
+        if (msg.sender != admin &amp;&amp; msg.sender != guardian) revert Unauthorized();
+        paused = true; emit PausedSet(true, msg.sender);
+    }
+    function unpause() external onlyAdmin { paused = false; emit PausedSet(false, msg.sender); }
+    function emergencySweep(address token) external onlyAdmin {
+        uint256 bal = IERC20(token).balanceOf(address(this));
+        if (bal &gt; 0) _safeTransfer(token, profitRecipient, bal);
+    }
+
+    // ---------------- low-level token helpers ----------------
+    function _safeTransfer(address token, address to, uint256 value) internal {
+        bool success;
+        assembly {
+            let ptr := mload(0x40)
+            mstore(ptr, 0xa9059cbb00000000000000000000000000000000000000000000000000000000)
+            mstore(add(ptr, 0x04), and(to, 0xffffffffffffffffffffffffffffffffffffffff))
+            mstore(add(ptr, 0x24), value)
+            success := call(gas(), token, 0, ptr, 0x44, ptr, 0x20)
+            if success {
+                switch returndatasize()
+                case 0 { success := gt(extcodesize(token), 0) }
+                default { success := and(gt(returndatasize(), 0x1f), eq(mload(ptr), 1)) }
+            }
+        }
+        if (!success) revert SafeTransferFailed();
+    }
+
+    // v11 fix C6: return data goes to rptr, so the calldata at ptr is never overwritten
+    // (v10.5 wrote the return value over the selector, corrupting the approve(0) retry).
+    function _safeApprove(address token, address spender, uint256 value) internal {
+        bool success;
+        assembly {
+            let ptr := mload(0x40)
+            let rptr := add(ptr, 0x80)
+            mstore(ptr, 0x095ea7b300000000000000000000000000000000000000000000000000000000)
+            mstore(add(ptr, 0x04), and(spender, 0xffffffffffffffffffffffffffffffffffffffff))
+            mstore(add(ptr, 0x24), value)
+            success := call(gas(), token, 0, ptr, 0x44, rptr, 0x20)
+            if success {
+                switch returndatasize()
+                case 0 { success := gt(extcodesize(token), 0) }
+                default { success := and(gt(returndatasize(), 0x1f), eq(mload(rptr), 1)) }
+            }
+            if and(iszero(success), gt(value, 0)) {
+                mstore(add(ptr, 0x24), 0)
+                let resetOk := call(gas(), token, 0, ptr, 0x44, rptr, 0x20)
+                if resetOk {
+                    mstore(add(ptr, 0x24), value)
+                    success := call(gas(), token, 0, ptr, 0x44, rptr, 0x20)
+                    if success {
+                        switch returndatasize()
+                        case 0 { success := gt(extcodesize(token), 0) }
+                        default { success := and(gt(returndatasize(), 0x1f), eq(mload(rptr), 1)) }
+                    }
+                }
+            }
+        }
+        if (!success) revert SafeApproveFailed();
+    }
+
+    function _arm(address expectedCaller, address repayToken, uint256 preBal) internal {
+        assembly {
+            tstore(EXPECTED_CALLBACK_SLOT, expectedCaller)
+            tstore(EXPECTED_REPAY_TOKEN_SLOT, repayToken)
+            tstore(PRE_BALANCE_SLOT, preBal)
+            tstore(CALLBACK_DONE_SLOT, 0)
+        }
+    }
+    function _disarm() internal {
+        assembly {
+            tstore(EXPECTED_CALLBACK_SLOT, 0) tstore(EXPECTED_REPAY_TOKEN_SLOT, 0)
+            tstore(PRE_BALANCE_SLOT, 0)       tstore(CALLBACK_DONE_SLOT, 0)
+        }
+    }
+    function _checkCap(address token, uint256 amount) internal view {
+        if (amount == 0) revert ZeroAmount();
+        if (amount &gt; maxLoan[token]) revert LoanCapExceeded();   // maxLoan==0 disables token
+    }
+
+    // ================= Tier-0: Uniswap V3 flash swap (no liquidation on this path) =======
+    function executeViaUniV3Callback(
+        address v3Pool, address repayToken, bool zeroForOne,
+        int256 amountSpecified, uint160 sqrtPriceLimitX96, bytes calldata payloadBytes
+    ) external onlyOperator whenNotPaused {
+        if (!allowedV3Pool[v3Pool]) revert PoolNotAllowed();
+        if (amountSpecified &lt;= 0) revert ZeroAmount();            // exact-input only
+        _checkCap(repayToken, uint256(amountSpecified));
+        _arm(v3Pool, repayToken, IERC20(repayToken).balanceOf(address(this)));
+        IUniV3Pool(v3Pool).swap(address(this), zeroForOne, amountSpecified,
+                                sqrtPriceLimitX96, payloadBytes);
+        uint256 done;
+        assembly { done := tload(CALLBACK_DONE_SLOT) }
+        if (done != 1) revert CallbackNotExecuted();
+        _disarm();
+    }
+
+    function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata data)
+        external nonReentrantCallback
+    {
+        address expectedPool; address expectedRepayToken; uint256 preBal;
+        assembly {
+            expectedPool := tload(EXPECTED_CALLBACK_SLOT)
+            expectedRepayToken := tload(EXPECTED_REPAY_TOKEN_SLOT)
+            preBal := tload(PRE_BALANCE_SLOT)
+        }
+        if (msg.sender != expectedPool || expectedPool == address(0)) revert Unauthorized();
+        if (!((amount0Delta &gt; 0 &amp;&amp; amount1Delta &lt; 0) || (amount1Delta &gt; 0 &amp;&amp; amount0Delta &lt; 0)))
+            revert InvalidCallbackDelta();
+
+        address t0 = IUniV3Pool(msg.sender).token0();
+        address t1 = IUniV3Pool(msg.sender).token1();
+        bool owe0 = amount0Delta &gt; 0;
+        address repayToken = owe0 ? t0 : t1;
+        if (repayToken != expectedRepayToken) revert RepayTokenMismatch();
+        assembly { tstore(CALLBACK_DONE_SLOT, 1) }
+
+        Ctx memory c = Ctx({
+            repayToken: repayToken,
+            startToken: owe0 ? t1 : t0,                                   // v11 fix C2
+            startingAmount: owe0 ? uint256(-amount1Delta) : uint256(-amount0Delta),
+            requiredRepay: owe0 ? uint256(amount0Delta) : uint256(amount1Delta),
+            preBalance: preBal,
+            allowLiquidation: false                                       // v11 fix C2
+        });
+        _runUnifiedStrategy(c, data);
+        _safeTransfer(repayToken, msg.sender, c.requiredRepay);
+    }
+
+    // ================= Tier-1: Balancer V2 =================
+    function executeViaBalancer(address loanToken, uint256 loanAmount, bytes calldata payloadBytes)
+        external onlyOperator whenNotPaused
+    {
+        _checkCap(loanToken, loanAmount);
+        _arm(BALANCER_VAULT, loanToken, IERC20(loanToken).balanceOf(address(this)));
+        address[] memory tokens = new address[](1); tokens[0] = loanToken;
+        uint256[] memory amounts = new uint256[](1); amounts[0] = loanAmount;
+        IBalancerVault(BALANCER_VAULT).flashLoan(address(this), tokens, amounts, payloadBytes);
+        _disarm();
+    }
+
+    function receiveFlashLoan(address[] memory tokens, uint256[] memory amounts,
+        uint256[] memory feeAmounts, bytes memory userData) external nonReentrantCallback
+    {
+        address expectedCaller; address expectedRepayToken; uint256 preBal;
+        assembly {
+            expectedCaller := tload(EXPECTED_CALLBACK_SLOT)
+            expectedRepayToken := tload(EXPECTED_REPAY_TOKEN_SLOT)
+            preBal := tload(PRE_BALANCE_SLOT)
+        }
+        if (msg.sender != BALANCER_VAULT || expectedCaller != BALANCER_VAULT) revert Unauthorized();
+        if (tokens.length != 1 || amounts.length != 1 || feeAmounts.length != 1
+            || tokens[0] != expectedRepayToken) revert RepayTokenMismatch();
+        Ctx memory c = Ctx({ repayToken: tokens[0], startToken: tokens[0],
+            startingAmount: amounts[0], requiredRepay: amounts[0] + feeAmounts[0],
+            preBalance: preBal, allowLiquidation: true });
+        _runUnifiedStrategy(c, userData);
+        _safeTransfer(tokens[0], BALANCER_VAULT, c.requiredRepay);
+    }
+
+    // ================= Tier-2: Aave V3 =================
+    function executeViaAave(address loanToken, uint256 loanAmount, bytes calldata payloadBytes)
+        external onlyOperator whenNotPaused
+    {
+        _checkCap(loanToken, loanAmount);
+        _arm(AAVE_V3_POOL, loanToken, IERC20(loanToken).balanceOf(address(this)));
+        IAaveV3Pool(AAVE_V3_POOL).flashLoanSimple(address(this), loanToken, loanAmount, payloadBytes, 0);
+        _disarm();
+    }
+
+    function executeOperation(address asset, uint256 amount, uint256 premium,
+        address initiator, bytes calldata params) external nonReentrantCallback returns (bool)
+    {
+        address expectedCaller; address expectedRepayToken; uint256 preBal;
+        assembly {
+            expectedCaller := tload(EXPECTED_CALLBACK_SLOT)
+            expectedRepayToken := tload(EXPECTED_REPAY_TOKEN_SLOT)
+            preBal := tload(PRE_BALANCE_SLOT)
+        }
+        if (msg.sender != AAVE_V3_POOL || expectedCaller != AAVE_V3_POOL || initiator != address(this))
+            revert Unauthorized();
+        if (asset != expectedRepayToken) revert RepayTokenMismatch();
+        Ctx memory c = Ctx({ repayToken: asset, startToken: asset, startingAmount: amount,
+            requiredRepay: amount + premium, preBalance: preBal, allowLiquidation: true });
+        _runUnifiedStrategy(c, params);
+        _safeApprove(asset, AAVE_V3_POOL, c.requiredRepay);
+        return true;
+    }
+
+    // ================= Atomic core =================
+    function _runUnifiedStrategy(Ctx memory c, bytes memory raw) internal {
+        ExecutionPayload memory p = abi.decode(raw, (ExecutionPayload));
+        if (block.timestamp &gt; p.deadline) revert DeadlineExpired(p.deadline, block.timestamp);
+        if (p.hops.length &gt; MAX_HOPS) revert TooManyHops();
+        if (p.deadline &gt; block.timestamp + MAX_DEADLINE_HORIZON) revert DeadlineTooFar();
+        if (p.minNetProfit == 0 || p.minNetProfit &lt; minProfitFloor[c.repayToken]) revert MinProfitBelowFloor();
+
+        address curToken = c.startToken;
+        uint256 curAmount = c.startingAmount;
+
+        if (p.hasLiquidation) {
+            if (!c.allowLiquidation) revert LiquidationNotAllowed();
+            if (p.debtAsset != c.startToken || p.debtAsset != c.repayToken
+                || p.debtToCover == 0 || p.debtToCover &gt; c.startingAmount) revert RepayTokenMismatch();
+            uint256 colPre = IERC20(p.collateralAsset).balanceOf(address(this));
+            _safeApprove(p.debtAsset, AAVE_V3_POOL, p.debtToCover);
+            IAaveV3Pool(AAVE_V3_POOL).liquidationCall(
+                p.collateralAsset, p.debtAsset, p.borrower, p.debtToCover, false);
+            _safeApprove(p.debtAsset, AAVE_V3_POOL, 0);
+            curAmount = IERC20(p.collateralAsset).balanceOf(address(this)) - colPre;
+            curToken = p.collateralAsset;
+            if (curAmount == 0) revert ZeroAmount();
+        }
+
+        uint256 n = p.hops.length;
+        for (uint256 i = 0; i &lt; n; ++i) {
+            RouteHop memory h = p.hops[i];
+            if (h.tokenIn != curToken) revert BadRoute();             // v11 fix C3: continuity
+            if (!allowedHopToken[h.tokenOut]) revert TokenNotAllowed();
+            curAmount = _executeHop(h, curAmount, p.deadline);
+            curToken = h.tokenOut;
+        }
+        if (curToken != c.repayToken) revert BadRoute();              // v11 fix C3: ends in repay token
+
+        // Delta-isolated guard (unchanged semantics)
+        uint256 finalBal = IERC20(c.repayToken).balanceOf(address(this));
+        uint256 needed = c.preBalance + c.requiredRepay + p.minNetProfit;
+        if (finalBal &lt; needed) revert InsufficientProfit(finalBal, needed);
+
+        // v11 fix C1: sweep ONLY the net profit; pre-existing balance stays in the contract
+        uint256 profit = finalBal - c.preBalance - c.requiredRepay;
+        if (profit &gt; 0) _safeTransfer(c.repayToken, profitRecipient, profit);   // v11 fix C4
+        emit Executed(c.repayToken, profit);
+    }
+
+    function _executeHop(RouteHop memory h, uint256 amountIn, uint256 deadline)
+        internal returns (uint256 out)
+    {
+        if (h.protocolId == 1) {
+            _safeApprove(h.tokenIn, UNIV3_ROUTER, amountIn);
+            out = IUniV3Router(UNIV3_ROUTER).exactInputSingle(IUniV3Router.ExactInputSingleParams({
+                tokenIn: h.tokenIn, tokenOut: h.tokenOut, fee: h.feeTier, recipient: address(this),
+                deadline: deadline, amountIn: amountIn, amountOutMinimum: h.minAmountOut,
+                sqrtPriceLimitX96: 0 }));
+        } else if (h.protocolId == 3) {
+            _safeApprove(h.tokenIn, CAMELOT_ROUTER, amountIn);
+            out = ICamelotAlgebraRouter(CAMELOT_ROUTER).exactInputSingle(
+                ICamelotAlgebraRouter.ExactInputSingleParams({
+                tokenIn: h.tokenIn, tokenOut: h.tokenOut, recipient: address(this),
+                deadline: deadline, amountIn: amountIn, amountOutMinimum: h.minAmountOut,
+                limitSqrtPrice: 0 }));
+        } else if (h.protocolId == 0) {
+            _safeApprove(h.tokenIn, UNIV2_ROUTER, amountIn);
+            address[] memory path = new address[](2);
+            path[0] = h.tokenIn; path[1] = h.tokenOut;
+            uint256[] memory outs = IUniV2Router(UNIV2_ROUTER).swapExactTokensForTokens(
+                amountIn, h.minAmountOut, path, address(this), deadline);
+            out = outs[outs.length - 1];
+        } else {
+            revert UnsupportedProtocol(h.protocolId);
+        }
+    }
+}
+</code></pre>
+<h2>8. Verification requirements</h2>
+<h3>8.1 Quality gates</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Requirement (proposed defaults)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Coverage</td>
+<td>100% line and branch on MEVExecutor and MEVMath; Rust coverage on math, guard, signer, decoder, governor.</td>
+</tr>
+<tr>
+<td>Mutation testing</td>
+<td>Gambit (or equivalent) on the contract and MEVMath; cargo-mutants on Rust math/guard/signer. Score &gt;= 90%; every survivor reviewed and either killed by a new test or justified in writing.</td>
+</tr>
+<tr>
+<td>Fuzz</td>
+<td>Foundry default &gt;= 10,000 runs in CI; &gt;= 1,000,000 for MEVMath nightly. Invariants: &gt;= 512 runs, depth &gt;= 200; fail_on_revert = true, or per-handler success ratio &gt;= 70% logged and enforced.</td>
+</tr>
+<tr>
+<td>Static analysis</td>
+<td>Slither with no unresolved high/medium findings; Rust: clippy with the denied lints of OC-03, cargo-audit, cargo-deny.</td>
+</tr>
+<tr>
+<td>Red-first evidence</td>
+<td>For each corrected issue the test MUST be shown failing on the old code for the right reason (-vvv output archived), then passing on the fix.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3>8.2 Fork tests (Arbitrum One)</h3>
+<p>End-to-end per tier and per protocol (V2-style router, V3 router, Camelot, Balancer, Aave flash, Aave liquidation) at several pinned blocks, with real USDT, USDC, WETH, ARB, WBTC. Assert: SC-03 balances, router allowances zero, events, gas within the ceiling, and agreement with the Rust simulation.</p>
+<h3>8.3 Adversarial mocks (each MUST have a test)</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Mock</th>
+<th>Expected result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AM-1</td>
+<td>V3 pool that returns from swap() without calling the callback</td>
+<td>CallbackNotExecuted</td>
+</tr>
+<tr>
+<td>AM-2</td>
+<td>V3 pool that calls the callback twice</td>
+<td>Revert (reentrancy or not-executed)</td>
+</tr>
+<tr>
+<td>AM-3</td>
+<td>Pool with wrong token0/token1 or non-opposite deltas</td>
+<td>RepayTokenMismatch / InvalidCallbackDelta</td>
+</tr>
+<tr>
+<td>AM-4</td>
+<td>Attacker calls Balancer vault flashLoan(executor, ...) with crafted userData</td>
+<td>Unauthorized</td>
+</tr>
+<tr>
+<td>AM-5</td>
+<td>Attacker calls receiveFlashLoan / executeOperation / uniswapV3SwapCallback directly</td>
+<td>Unauthorized</td>
+</tr>
+<tr>
+<td>AM-6</td>
+<td>USDT-style token (no return value, requires approve(0) first)</td>
+<td>Succeeds, allowance ends at 0</td>
+</tr>
+<tr>
+<td>AM-7</td>
+<td>Token returning false; fee-on-transfer; rebasing</td>
+<td>Fails closed or profit measured by balance</td>
+</tr>
+<tr>
+<td>AM-8</td>
+<td>ERC777-style hook reentering executeVia* / callbacks</td>
+<td>Reverts</td>
+</tr>
+<tr>
+<td>AM-9</td>
+<td>Router returning inflated amountOut, or consuming less than approved</td>
+<td>Profit from balances; allowance reset</td>
+</tr>
+<tr>
+<td>AM-10</td>
+<td>Token that reverts on transfer to recipient (blacklist) and returndata-bomb token</td>
+<td>Whole tx reverts; no stuck state</td>
+</tr>
+<tr>
+<td>AM-11</td>
+<td>Malformed payloads: empty hops, gap in route, wrong end token, hops &gt; MAX_HOPS, far deadline, minNetProfit below floor, unknown protocolId</td>
+<td>Specific custom errors</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3>8.4 Test matrix (red on v10.5, green on v11)</h3>
+<p>Each test MUST first FAIL on the v10.5 behavior for the stated reason (archive the -vvv output), then pass on the fix.</p>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Test</th>
+<th>Covers</th>
+<th>On v10.5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>test_Sweep_KeepsPreExistingBalance (preBal &gt; 0)</td>
+<td>C1, I-4</td>
+<td>FAIL: balance drained to owner</td>
+</tr>
+<tr>
+<td>test_V3Path_Liquidation_Rejected / UsesCorrectTokens</td>
+<td>C2</td>
+<td>FAIL: wrong-token compare or wrong approval</td>
+</tr>
+<tr>
+<td>test_BrokenHopChain_Reverts (gap, wrong start, wrong end)</td>
+<td>C3</td>
+<td>FAIL: opaque revert / wasted gas, no BadRoute</td>
+</tr>
+<tr>
+<td>test_OperatorCannotChangeRecipientOrLists; test_OnlyAdminSweepsToRecipient</td>
+<td>C4, I-8</td>
+<td>Not expressible on v10.5 (no roles)</td>
+</tr>
+<tr>
+<td>test_V3Pool_NotWhitelisted_Reverts; test_LoanCap; test_Paused_Blocks_All</td>
+<td>C5, I-7</td>
+<td>FAIL: no such checks</td>
+</tr>
+<tr>
+<td>test_Approve_USDT_RetryPath (token that requires approve(0) first)</td>
+<td>C6</td>
+<td>FAIL: retry sends corrupted selector</td>
+</tr>
+<tr>
+<td>test_V3_SwapWithoutCallback_Reverts (malicious pool mock)</td>
+<td>C7, I-3</td>
+<td>FAIL: silently succeeds</td>
+</tr>
+<tr>
+<td>test_Callback_RevertsIfNotArmed (all 3) ; test_TransientSlotsZeroAfter</td>
+<td>I-1</td>
+<td>PASS expected (regression)</td>
+</tr>
+<tr>
+<td>test_InvalidCallbackDelta_Reverts; test_RepayTokenMismatch_Reverts</td>
+<td>I-2</td>
+<td>PASS expected (regression)</td>
+</tr>
+<tr>
+<td>testFuzz_SqrtProduct4_ExactOrReverts (factors around 2^128)</td>
+<td>I-10</td>
+<td>FAIL: silent underestimate or panic 0x11</td>
+</tr>
+<tr>
+<td>testFuzz_GetAmountIn_BoundsRevertExplicitly (amountOut &gt;= reserveOut, fee == BPS)</td>
+<td>I-10</td>
+<td>FAIL: panic 0x11 / 0x12 instead of custom error</td>
+</tr>
+<tr>
+<td>prop_rust_matches_solidity_vectors; prop_no_silent_overflow</td>
+<td>I-10</td>
+<td>FAIL: wrap/None mismatch</td>
+</tr>
+<tr>
+<td>test_Guard_RejectsHandBuiltReport; test_Guard_RecipientDelta</td>
+<td>C8-C10, I-11</td>
+<td>FAIL: guard always true</td>
+</tr>
+<tr>
+<td>test_Nonce_NoGapOnRejectedSim; test_Resync_MovesBackward</td>
+<td>C11, I-12</td>
+<td>FAIL: nonce gap, no backward resync</td>
+</tr>
+<tr>
+<td>testFork_Balancer / Aave / V3 / Camelot / Liquidation end-to-end on Arbitrum fork</td>
+<td>all</td>
+<td>n/a (needs fork)</td>
+</tr>
+<tr>
+<td>invariant_ExecutorBalanceEqualsPre; invariant_OnlyRecipientGains</td>
+<td>I-4, I-5</td>
+<td>FAIL on v10.5</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2>9. Corrections to v10.5 and unverified claims</h2>
+<h3>9.1 Why this document differs from v10.5</h3>
+<p>v10.5 contained logic errors, a decorative runtime guard, unit mistakes, unsourced market claims and the label &quot;Gold Master / Hardened&quot; without evidence of audit. The table lists every correction; the code in section 7 already incorporates them.</p>
+<h3>9.2 Correction table</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>ID</th>
+<th>v10.5 location</th>
+<th>Problem</th>
+<th>v10.6 fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>C1</td>
+<td>Changelog #3, 5.12 ProfitGuard sweep</td>
+<td>Guard protects preExistingBalance, then sweepableProfit = finalBalance - requiredRepay sends that same balance to owner. Contradicts &quot;delta-isolated&quot;.</td>
+<td>Sweep only finalBal - preBalance - requiredRepay to profitRecipient. Pre-existing balance stays.</td>
+</tr>
+<tr>
+<td>C2</td>
+<td>5.12 V3 callback</td>
+<td>_runUnifiedStrategy receives repayToken (token owed) but the received amount is in the OTHER token. Liquidation check compares debtAsset to the wrong token and debtToCover to the wrong amount.</td>
+<td>Ctx carries startToken and repayToken. Liquidation is rejected on the V3 path (matches flash.rs, which already excludes it). Liquidation requires debtAsset == startToken == repayToken.</td>
+</tr>
+<tr>
+<td>C3</td>
+<td>5.12 hops</td>
+<td>No route validation. Bad payloads waste gas and fail with opaque errors.</td>
+<td>hops[0].tokenIn == startToken (or collateral after liquidation); each tokenIn == previous tokenOut; last tokenOut == repayToken, else BadRoute().</td>
+</tr>
+<tr>
+<td>C4</td>
+<td>5.12 roles, 5.9, 6.1</td>
+<td>owner = msg.sender (deployer) and every entry point is onlyOwner, yet the spec runs 2-3 hot SignerPool wallets. Any non-deployer wallet reverts. Owner is also the profit sink: one hot key = everything.</td>
+<td>admin (cold), guardian (pause only), immutable profitRecipient (cold), operator set for hot keys. Executor keys cannot change recipient or lists.</td>
+</tr>
+<tr>
+<td>C5</td>
+<td>5.12 limits</td>
+<td>No pool whitelist, no loan cap, no pause. Tier-0 trusts any v3Pool the caller names.</td>
+<td>allowedV3Pool whitelist, maxLoan per token (0 = disabled), pause/unpause, MinProfitZero check.</td>
+</tr>
+<tr>
+<td>C6</td>
+<td>5.12 _safeApprove</td>
+<td>Return data is written to ptr, overwriting the approve selector. The approve(0)-then-approve retry (the USDT case it exists for) then sends a corrupted call.</td>
+<td>Return data goes to rptr = ptr + 0x80.</td>
+</tr>
+<tr>
+<td>C7</td>
+<td>5.12 V3 entry</td>
+<td>If swap() returns without invoking the callback nothing detects it.</td>
+<td>CALLBACK_DONE transient flag; revert CallbackNotExecuted() if not set.</td>
+</tr>
+<tr>
+<td>C8</td>
+<td>5.10 + 5.13</td>
+<td>main.rs builds SimulationReport itself (success: true, balance computed from the expected profit, recipient = treasury). verify_simulation can never fail. The guard is decorative.</td>
+<td>Report must come from a real revm run on forked state (section 4.2). main.rs may not construct it.</td>
+</tr>
+<tr>
+<td>C9</td>
+<td>5.13 governor_treasury</td>
+<td>Set to constants::WETH, a token contract address, not a wallet.</td>
+<td>Config value = the profitRecipient cold address, loaded from config and checked equal to the contract getter at startup.</td>
+</tr>
+<tr>
+<td>C10</td>
+<td>5.10 balance check</td>
+<td>final_loan_token_balance &gt;= pre + repay + profit is measured on the contract; after the sweep and repayment the contract holds roughly pre, so a correct trade fails.</td>
+<td>Measure recipient balance delta and require executor balance == pre-existing balance after execution.</td>
+</tr>
+<tr>
+<td>C11</td>
+<td>5.9 SignerPool</td>
+<td>fetch_add reserves a nonce at selection time, before simulation or send. A rejected or failed tx leaves a nonce gap and later txs hang. resync uses fetch_max so it can never move back.</td>
+<td>Peek nonce, commit only after successful broadcast, resync with store() from chain pending nonce. One in-flight tx per wallet.</td>
+</tr>
+<tr>
+<td>C12</td>
+<td>1.2 revert cost</td>
+<td>&quot;~45,000 gas, $0.005-$0.02&quot;. ProfitGuard fails after all hops run, so a guard revert costs about the full execution (main.rs itself assumes 280,000 gas).</td>
+<td>Replace with measured numbers from Stage 1. Budget and break-even in 1.2 must be recomputed. [UNVERIFIED]</td>
+</tr>
+<tr>
+<td>C13</td>
+<td>1.2 &quot;zero-fee flash loans&quot;</td>
+<td>Aave V3 charges a premium; a Tier-0 flash swap pays the pool fee tier. Only Balancer is described as 0%.</td>
+<td>Fees are inputs to requiredRepay and to profit estimates. Verify current Balancer and Aave fee parameters on-chain. [UNVERIFIED]</td>
+</tr>
+<tr>
+<td>C14</td>
+<td>5.11 tx.rs</td>
+<td>fee_or_tier &amp; 0xFFFFFF silently truncates. No route validation before encoding.</td>
+<td>Reject fee &gt; 0xFFFFFF; run validate_route() mirroring C3 before encoding.</td>
+</tr>
+<tr>
+<td>C15</td>
+<td>4.1 vs 5.7</td>
+<td>Spec text: Aging 111-220 ms, Expired &gt; 250 ms. Code: anything over 220 is Expired and liquidations get no extra window.</td>
+<td>Decision needed. v10.6 uses Aging 111..=250 for liquidations only; arbitrage expires after 110 ms.</td>
+</tr>
+<tr>
+<td>C16</td>
+<td>5.3 Governor</td>
+<td>catch_unwind does nothing under panic = &quot;abort&quot;. Spokes run sequentially so a slow one blocks the hot path. DEGRADED never returns to HEALTHY; TRIPPED only via manual revive().</td>
+<td>Cargo profile panic = &quot;unwind&quot;; run spokes with a per-spoke deadline; set HEALTHY on a successful call; auto-probe a TRIPPED spoke after a cool-down.</td>
+</tr>
+<tr>
+<td>C17</td>
+<td>5 &quot;100% Complete Files&quot;</td>
+<td>simroom.rs has no revm. main.rs never connects to the feed, signs or sends. Governor has no registered spokes. partial.rs is never called. balancer_liquidity is faked with loan_amount.</td>
+<td>Replace the claim with the status table in 4.5.</td>
+</tr>
+<tr>
+<td>C18</td>
+<td>1.1 / 4.2 / 5.5 ordering policy</td>
+<td>The PGA / 125 ms rounds claim and competitor_priority_fee input are unsourced (see section 5). main.rs passes a constant 10,000,000 for the competitor fee.</td>
+<td>Bidder is optional until the ordering policy is verified. Competitor fee must be measured from the feed or default to 0. [UNVERIFIED]</td>
+</tr>
+<tr>
+<td>C19</td>
+<td>5.2 / 5.10 simulation</td>
+<td>CacheDB<EmptyDB> has no state, so simulations pass or fail meaninglessly. revm does not reproduce Arbitrum gas (L1 component, precompiles) exactly.</td>
+<td>Back the DB with forked state at the target block; compare simulated vs actual gas in Stage 1.</td>
+</tr>
+<tr>
+<td>C20</td>
+<td>4.2 / 5.11 L1 fee</td>
+<td>getCurrentTxL1GasFees() reports the fee of the current transaction, so it is not a pre-trade estimator off-chain. [UNVERIFIED]</td>
+<td>Use the NodeInterface gas-estimate-components path for off-chain estimation and verify the exact call against Arbitrum docs.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h3>9.3 Unverified claims register (resolve before live funds)</h3>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Claim in v10.5</th>
+<th>Required action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Arbitrum ordering moved to Priority Gas Auctions with 125 ms rounds; Entropy figures (87% / 98% / 97%); zero front-running claim</td>
+<td>Read primary sources (governance proposal, Arbitrum docs). Until confirmed: bidder disabled (OC-09), decay constant treated as a tunable parameter.</td>
+</tr>
+<tr>
+<td>Revert cost ~45k gas, $0.005-$0.02; revenue per event and events/day</td>
+<td>Replace with measured Stage-1 data; recompute break-even.</td>
+</tr>
+<tr>
+<td>Flash fees (Balancer 0%, Aave premium)</td>
+<td>Read on-chain parameters at deploy time and at runtime.</td>
+</tr>
+<tr>
+<td>getCurrentTxL1GasFees as an estimator; alloy/revm API details</td>
+<td>Verify against Arbitrum docs; compile and test.</td>
+</tr>
+<tr>
+<td>Router/token addresses; Atlas bond (0.1 ETH)</td>
+<td>Confirm from official sources; encode in OC-08 self-check.</td>
+</tr>
+<tr>
+<td>&quot;Certora/Spearbit-Hardened&quot;</td>
+<td>Remove the label until an actual audit report exists.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2>10. Release gates and capital ramp</h2>
+<div class="md-table" role="group" aria-label="Table" tabindex="0"><table>
+<thead>
+<tr>
+<th>Gate</th>
+<th>Exit criteria</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G0 Build</td>
+<td>Pinned compile, lints and static analysis clean, coverage targets met.</td>
+</tr>
+<tr>
+<td>G1 Tests</td>
+<td>All SC/MP/OC tests green, red-first evidence archived, fuzz/invariant/mutation thresholds met.</td>
+</tr>
+<tr>
+<td>G2 Fork</td>
+<td>Section 8.2 complete at multiple blocks with adversarial mocks passing.</td>
+</tr>
+<tr>
+<td>G3 Formal</td>
+<td>P1-P4 proven, or each gap documented with compensating tests.</td>
+</tr>
+<tr>
+<td>G4 Audit</td>
+<td>Independent audit done; findings fixed and re-tested.</td>
+</tr>
+<tr>
+<td>G5 Shadow</td>
+<td>&gt;= 7 days and &gt;= 500 opportunities on forked-state simulation; zero invariant violations; sim vs real drift within OP-02 tolerance; section 9.3 items resolved.</td>
+</tr>
+<tr>
+<td>G6 Live ramp</td>
+<td>Start with tiny maxLoan and a daily loss limit; raise (proposed: at most 2x per week) only while realized profit tracks simulation and no breaker tripped. Re-audit before large caps.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2>11. Open decisions</h2>
+<ul>
+<li>
+<p>D-1 Age thresholds: spec text says Aging 111-220 ms and Expired &gt; 250 ms; code differs. Proposed: arbitrage expires after 110 ms, liquidations Aging up to 250 ms.</p>
+</li>
+<li>
+<p>D-2 Enable Tier-0 (V3 flash swap) at launch or start with Balancer/Aave only (smaller attack surface).</p>
+</li>
+<li>
+<p>D-3 Liquidation scope: which collateral/debt pairs, close-factor handling, leftover debt token policy.</p>
+</li>
+<li>
+<p>D-4 Hop-token and pool whitelist contents; who may add and with what delay.</p>
+</li>
+<li>
+<p>D-5 Keep or drop Huff/Yul (MP-06).</p>
+</li>
+<li>
+<p>D-6 Spoke logic: how events become ExecutionSignals (detection, sizing, profit estimation in loan-token units and wei) is unspecified and must be designed and tested separately.</p>
+</li>
+</ul>
+
+</body></html>
